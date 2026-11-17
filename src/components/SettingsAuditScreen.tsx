@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
-import { Download, FileSpreadsheet, History, Save, Search, Settings, Upload } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Download, FileSpreadsheet, History, Monitor, RefreshCw, Save, Search, Settings, Upload } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import type {
   AuditEntry,
   GymConfig,
@@ -36,11 +37,63 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
   onExportMembersCsv,
   onExportLeadsCsv,
 }) => {
+  const { apiFetch, isDesktopOffline } = useAuth();
   const [draft, setDraft] = useState<GymConfig>(config);
   const [auditQuery, setAuditQuery] = useState('');
   const [auditCat, setAuditCat] = useState<'All' | AuditEntry['category']>('All');
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [releaseInfo, setReleaseInfo] = useState<{
+    downloadUrl: string | null;
+    assetName: string | null;
+    assetSizeMb: string | null;
+    latestVersion: string;
+    message: string;
+  } | null>(null);
+  const [showBuildGuide, setShowBuildGuide] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await apiFetch<{
+          downloadUrl?: string | null;
+          assetName?: string | null;
+          assetSizeMb?: string | null;
+          latestVersion?: string;
+          message?: string;
+        }>('/api/updates/status');
+        if (active) {
+          setReleaseInfo({
+            downloadUrl: data.downloadUrl ?? null,
+            assetName: data.assetName ?? null,
+            assetSizeMb: data.assetSizeMb ?? null,
+            latestVersion: data.latestVersion || '1.0.0',
+            message: data.message || '',
+          });
+        }
+      } catch {
+        // Ignore network errors silently
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [apiFetch]);
+
+  const handleDesktopUpdateCheck = async () => {
+    setCheckingUpdates(true);
+    try {
+      if (window.kinetixDesktop?.checkForUpdates) {
+        const result = await window.kinetixDesktop.checkForUpdates();
+        setUpdateMessage(result.message);
+      }
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
 
   const filteredAudit = auditLog.filter((entry) => {
     const q = auditQuery.trim().toLowerCase();
@@ -358,6 +411,80 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Windows One-Click Desktop App (.exe) */}
+      <section className="card-resting rounded-xl p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-[#ECFDF5] text-[#059669] flex items-center justify-center shrink-0">
+              <Monitor className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-display text-lg font-semibold text-[#0F172A]">
+                Windows Desktop App (.exe)
+              </h2>
+              <p className="text-xs text-[#64748B] max-w-2xl">
+                Install Kinetix as a one-click standalone Windows application for your company. All club records stay encrypted locally on your computer and updates sync automatically from GitHub Releases.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isDesktopOffline ? (
+              <button
+                type="button"
+                onClick={() => void handleDesktopUpdateCheck()}
+                disabled={checkingUpdates}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#059669] px-4 py-2 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-60 cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${checkingUpdates ? 'animate-spin' : ''}`} />
+                {checkingUpdates ? 'Checking...' : 'Check for Updates'}
+              </button>
+            ) : releaseInfo?.downloadUrl ? (
+              <a
+                href="/api/download/windows-exe"
+                download={releaseInfo.assetName || 'Kinetix-Setup.exe'}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#059669] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#047857] transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download {releaseInfo.assetName || `Kinetix-Setup-${releaseInfo.latestVersion}.exe`}
+                {releaseInfo.assetSizeMb ? ` (${releaseInfo.assetSizeMb})` : ''}
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowBuildGuide((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#059669] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#047857] cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Get One-Click Windows Installer (.exe)
+              </button>
+            )}
+          </div>
+        </div>
+
+        {updateMessage && (
+          <p className="text-xs font-medium text-[#047857] bg-[#ECFDF5] rounded-lg px-3.5 py-2">
+            {updateMessage}
+          </p>
+        )}
+
+        {showBuildGuide && !releaseInfo?.downloadUrl && !isDesktopOffline && (
+          <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-4 text-xs text-[#334155] space-y-2">
+            <p className="font-semibold text-[#0F172A]">
+              How to produce your company&apos;s one-click Windows .exe installer:
+            </p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                Push this project to GitHub and create a release tag (for example <span className="font-mono font-semibold">v1.0.0</span>) or run the <span className="font-semibold">Build &amp; Publish Windows One-Click Installer</span> GitHub Action to download <span className="font-mono font-semibold">Kinetix-Setup-1.0.0.exe</span>.
+              </li>
+              <li>
+                Or on any Windows PC with Node.js installed, double-click <span className="font-mono font-semibold">build-windows-exe.bat</span> in the project folder to generate the one-click <span className="font-mono font-semibold">.exe</span> locally.
+              </li>
+            </ol>
+          </div>
+        )}
+      </section>
 
       {/* Audit History Ledger */}
       <section className="card-resting rounded-lg overflow-hidden">

@@ -77,25 +77,44 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, mode: isOfflineStorageActive() ? 'offline' : 'cloud' });
 });
 
-app.get('/api/updates/status', requireAuth, async (_req, res) => {
-  let currentVersion = '1.0.0';
+function resolveGitHubRepoSlug(): string | null {
+  const fromEnv = process.env.GITHUB_REPO?.trim();
+  if (fromEnv && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(fromEnv)) {
+    return fromEnv;
+  }
   try {
     const pkgRaw = fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
-    const pkg = JSON.parse(pkgRaw) as { version?: string };
-    if (pkg.version) currentVersion = pkg.version;
+    const pkg = JSON.parse(pkgRaw) as { repository?: string | { url?: string } };
+    const repoUrl = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url || '';
+    const match = repoUrl.match(/github\.com[/:]([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(?:\.git)?$/i);
+    if (match?.[1]) return match[1];
   } catch {
-    // Keep fallback version
+    // Ignore parse error
   }
+  return null;
+}
 
-  const repoSlug = process.env.GITHUB_REPO?.trim();
-  if (!repoSlug || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repoSlug)) {
-    return res.json({
+interface GitHubAssetInfo {
+  name?: string;
+  browser_download_url?: string;
+  size?: number;
+}
+
+async function fetchLatestReleaseInfo(currentVersion: string) {
+  const repoSlug = resolveGitHubRepoSlug();
+  if (!repoSlug) {
+    return {
+      repoConfigured: false,
       currentVersion,
-      updateAvailable: false,
       latestVersion: currentVersion,
+      updateAvailable: false,
+      releaseUrl: null as string | null,
+      downloadUrl: null as string | null,
+      assetName: null as string | null,
+      assetSizeMb: null as string | null,
       offlineMode: isOfflineStorageActive(),
       message: 'Running latest installed version.',
-    });
+    };
   }
 
   try {
@@ -104,36 +123,92 @@ app.get('/api/updates/status', requireAuth, async (_req, res) => {
       signal: AbortSignal.timeout(4000),
     });
     if (!ghRes.ok) {
-      return res.json({
+      return {
+        repoConfigured: true,
         currentVersion,
-        updateAvailable: false,
         latestVersion: currentVersion,
+        updateAvailable: false,
+        releaseUrl: `https://github.com/${repoSlug}/releases`,
+        downloadUrl: null,
+        assetName: null,
+        assetSizeMb: null,
         offlineMode: isOfflineStorageActive(),
-        message: 'Connected locally. No new releases published yet.',
-      });
+        message: 'Connected locally. No Windows release published yet.',
+      };
     }
-    const release = (await ghRes.json()) as { tag_name?: string; html_url?: string };
+
+    const release = (await ghRes.json()) as {
+      tag_name?: string;
+      html_url?: string;
+      assets?: GitHubAssetInfo[];
+    };
     const latest = (release.tag_name || currentVersion).replace(/^v/i, '');
     const updateAvailable = latest !== currentVersion;
-    return res.json({
+    const exeAsset = (release.assets || []).find(
+      (a) =>
+        typeof a.name === 'string' &&
+        a.name.toLowerCase().endsWith('.exe') &&
+        typeof a.browser_download_url === 'string' &&
+        a.browser_download_url.startsWith('https://')
+    );
+
+    return {
+      repoConfigured: true,
       currentVersion,
       latestVersion: latest,
       updateAvailable,
-      releaseUrl: release.html_url || null,
+      releaseUrl: release.html_url || `https://github.com/${repoSlug}/releases`,
+      downloadUrl: exeAsset?.browser_download_url || null,
+      assetName: exeAsset?.name || null,
+      assetSizeMb:
+        typeof exeAsset?.size === 'number' && exeAsset.size > 0
+          ? `${(exeAsset.size / (1024 * 1024)).toFixed(1)} MB`
+          : null,
       offlineMode: isOfflineStorageActive(),
       message: updateAvailable
         ? `Version ${latest} is ready on GitHub.`
         : `You are up to date (v${currentVersion}).`,
-    });
+    };
   } catch {
-    return res.json({
+    return {
+      repoConfigured: true,
       currentVersion,
-      updateAvailable: false,
       latestVersion: currentVersion,
+      updateAvailable: false,
+      releaseUrl: null,
+      downloadUrl: null,
+      assetName: null,
+      assetSizeMb: null,
       offlineMode: isOfflineStorageActive(),
       message: 'Offline mode active — your local club data is safely stored on this computer.',
+    };
+  }
+}
+
+function readPackageVersion(): string {
+  try {
+    const pkgRaw = fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
+    const pkg = JSON.parse(pkgRaw) as { version?: string };
+    if (pkg.version) return pkg.version;
+  } catch {
+    // Keep fallback version
+  }
+  return '1.0.0';
+}
+
+app.get('/api/updates/status', requireAuth, async (_req, res) => {
+  const info = await fetchLatestReleaseInfo(readPackageVersion());
+  res.json(info);
+});
+
+app.get('/api/download/windows-exe', async (_req, res) => {
+  const info = await fetchLatestReleaseInfo(readPackageVersion());
+  if (!info.downloadUrl) {
+    return res.status(404).json({
+      error: 'No published Windows .exe installer was found on GitHub Releases yet.',
     });
   }
+  return res.redirect(302, info.downloadUrl);
 });
 
 async function resolveDbUser(req: AuthRequest) {

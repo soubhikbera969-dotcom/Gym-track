@@ -40,16 +40,23 @@ Each gym or company can run Kinetix **100% locally and offline** as a standalone
 
 ---
 
-## Building the Windows `.exe` Installer
+## One-Click Windows `.exe` Installer
 
+Kinetix packages into a **one-click Windows NSIS installer** (`Kinetix-Setup-<version>.exe`): double-clicking the `.exe` installs Kinetix immediately without multi-step setup wizards, creates Desktop and Start Menu shortcuts, launches the app automatically, and keeps all encrypted local company data across updates.
+
+### Option A — Automated Build & Publish via GitHub
 1. Push this repository to **GitHub**.
-2. Create and push a release tag (for example, `v1.0.0`):
+2. Create and push a release tag (for example, `v1.0.0`) or run the **Build & Publish Windows One-Click Installer** workflow from the **Actions** tab:
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
-3. The included GitHub Actions workflow (`.github/workflows/release-windows.yml`) builds `Kinetix-Setup-1.0.0.exe` on Windows and publishes it to **GitHub Releases** automatically.
-4. Any gym or company can download and install `Kinetix-Setup-*.exe` on Windows, keep all of their club records offline on their own computer, and receive automatic GitHub updates whenever you publish a new version tag.
+3. Download `Kinetix-Setup-1.0.0.exe` in one click from **GitHub Releases** (or from the **Windows Desktop App** section inside Kinetix Settings once connected).
+
+### Option B — Build Directly on a Windows PC
+1. Download or clone the repository onto a Windows computer with Node.js 20+ installed.
+2. Double-click `build-windows-exe.bat` (or run `npm run dist:win`).
+3. Your one-click installer `Kinetix-Setup-<version>.exe` will be generated inside the `release\` folder.
 
 ---
 

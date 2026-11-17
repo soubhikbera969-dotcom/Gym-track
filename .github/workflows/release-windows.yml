@@ -1,4 +1,4 @@
-name: Build & Publish Windows Installer
+name: Build & Publish Windows One-Click Installer
 
 on:
   push:
@@ -25,13 +25,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install desktop packager
-        run: npm install --no-save electron electron-builder electron-updater
+      - name: Install Windows packager
+        run: npm install --no-save electron electron-builder
 
       - name: Build web assets
         run: npm run build
 
-      - name: Build Windows .exe and publish to GitHub Releases
+      - name: Build & Publish One-Click Windows .exe (Release Tag)
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --config electron-builder.yml --publish always
+
+      - name: Build One-Click Windows .exe (Manual Run)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: npx electron-builder --win --config electron-builder.yml --publish never
+
+      - name: Upload Windows .exe Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinetix-windows-installer
+          path: release/*.exe
+          if-no-files-found: error

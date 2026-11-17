@@ -1,6 +1,7 @@
 appId: com.kinetix.gymops
 productName: Kinetix
 copyright: Copyright © 2026 Kinetix
+asar: false
 directories:
   output: release
 files:
@@ -11,6 +12,7 @@ files:
   - package.json
   - "!src/**/*.test.*"
   - "!**/.env*"
+  - "!release/**/*"
 win:
   target:
     - target: nsis
@@ -18,9 +20,10 @@ win:
         - x64
   artifactName: Kinetix-Setup-${version}.exe
 nsis:
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
 publish:
