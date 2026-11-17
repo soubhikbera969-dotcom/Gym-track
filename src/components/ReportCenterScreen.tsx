@@ -3,6 +3,7 @@ import { BarChart3, Box, Download } from 'lucide-react';
 import { REPORT_DATASETS } from '../data/gymData';
 import type { ReportDomain, TimeRange } from '../types/gym';
 import { Analytics3DChart } from './Analytics3DChart';
+import { buildSafeCsv } from '../utils/csv';
 
 interface ReportCenterScreenProps {
   facilityName: string;
@@ -45,14 +46,14 @@ export const ReportCenterScreen: React.FC<ReportCenterScreenProps> = ({
     const rows = scaledCategories.map((c) => {
       const variance = (((c.current - c.prior) / Math.max(c.prior, 1)) * 100).toFixed(1);
       return [
-        `"${c.label}"`,
-        `${c.current}`,
-        `${c.prior}`,
+        c.label,
+        c.current,
+        c.prior,
         `${variance}%`,
-        `"${c.note}"`,
+        c.note,
       ];
     });
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csv = buildSafeCsv(headers, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

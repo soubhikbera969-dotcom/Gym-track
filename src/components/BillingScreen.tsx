@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CreditCard, Download, Plus, RefreshCw, Snowflake, XCircle } from 'lucide-react';
 import type { Member, MembershipPlan, TransactionRecord } from '../types/gym';
 import { StatusChip } from './StatusChip';
+import { buildSafeCsv } from '../utils/csv';
 
 interface BillingScreenProps {
   plans: MembershipPlan[];
@@ -50,14 +51,14 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
     const header = ['TransactionID', 'Member', 'Plan', 'Amount', 'Date', 'Status', 'Method'];
     const rows = filteredTxns.map((t) => [
       t.id,
-      `"${t.memberName}"`,
-      `"${t.planName}"`,
-      String(t.amount),
+      t.memberName,
+      t.planName,
+      t.amount,
       t.date,
       t.status,
-      `"${t.method}"`,
+      t.method,
     ]);
-    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csv = buildSafeCsv(header, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

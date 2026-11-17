@@ -76,6 +76,7 @@ import { ReportCenterScreen } from './components/ReportCenterScreen';
 import { ScheduleAndStaffScreen } from './components/ScheduleAndStaffScreen';
 import { SettingsAuditScreen } from './components/SettingsAuditScreen';
 import { SignInGate } from './components/SignInGate';
+import { buildSafeCsv } from './utils/csv';
 
 interface WorkspaceResponse {
   config: GymConfig;
@@ -545,15 +546,15 @@ export default function App() {
     const headers = ['ID', 'Name', 'Email', 'Phone', 'Tier', 'MonthlyRate', 'Status', 'CheckIns30d'];
     const rows = members.map((m) => [
       m.id,
-      `"${m.name}"`,
+      m.name,
       m.email,
-      `"${m.phone}"`,
-      `"${m.tier}"`,
-      String(m.monthlyRate),
+      m.phone,
+      m.tier,
+      m.monthlyRate,
       m.status,
-      String(m.checkIns30d),
+      m.checkIns30d,
     ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csv = buildSafeCsv(headers, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -571,14 +572,14 @@ export default function App() {
     const headers = ['ID', 'Name', 'Email', 'Source', 'Stage', 'TrialStatus', 'FollowUp'];
     const rows = leads.map((l) => [
       l.id,
-      `"${l.name}"`,
+      l.name,
       l.email,
       l.source,
       l.stage,
       l.trialStatus,
       l.followUpDate,
     ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csv = buildSafeCsv(headers, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

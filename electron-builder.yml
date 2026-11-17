@@ -1,0 +1,28 @@
+appId: com.kinetix.gymops
+productName: Kinetix
+copyright: Copyright © 2026 Kinetix
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - server.ts
+  - src/**/*
+  - package.json
+  - "!src/**/*.test.*"
+  - "!**/.env*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Kinetix-Setup-${version}.exe
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+publish:
+  provider: github
+  releaseType: release

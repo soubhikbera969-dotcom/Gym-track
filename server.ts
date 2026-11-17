@@ -1,9 +1,16 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import {
+  agentRateLimiter,
+  sanitizePlainText,
+  securityHeaders,
+  writeRateLimiter,
+} from './src/middleware/security.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { ensureWorkspaceSeeded } from './src/db/seed.ts';
 import {
@@ -19,6 +26,7 @@ import {
   cycleEquipmentStatusDb,
   evaluateAutomatedNotificationsDb,
   importMembersDb,
+  isOfflineStorageActive,
   loadWorkspaceData,
   performSessionActionDb,
   performSubscriptionActionDb,
@@ -27,7 +35,7 @@ import {
   updateLeadDb,
   updateMemberDb,
   updateNotificationStatusDb,
-} from './src/db/crmRepo.ts';
+} from './src/db/repo.ts';
 import {
   runGymAgentChat,
   synthesizeSpeechReply,
@@ -54,13 +62,89 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
+app.use(securityHeaders);
 app.use(express.json({ limit: '15mb' }));
+app.use('/api/crm', (req, res, next) =>
+  req.method === 'GET' ? next() : writeRateLimiter(req, res, next)
+);
+app.use('/api/notifications', (req, res, next) =>
+  req.method === 'GET' ? next() : writeRateLimiter(req, res, next)
+);
+app.use('/api/agent', agentRateLimiter);
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, mode: isOfflineStorageActive() ? 'offline' : 'cloud' });
+});
+
+app.get('/api/updates/status', requireAuth, async (_req, res) => {
+  let currentVersion = '1.0.0';
+  try {
+    const pkgRaw = fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
+    const pkg = JSON.parse(pkgRaw) as { version?: string };
+    if (pkg.version) currentVersion = pkg.version;
+  } catch {
+    // Keep fallback version
+  }
+
+  const repoSlug = process.env.GITHUB_REPO?.trim();
+  if (!repoSlug || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repoSlug)) {
+    return res.json({
+      currentVersion,
+      updateAvailable: false,
+      latestVersion: currentVersion,
+      offlineMode: isOfflineStorageActive(),
+      message: 'Running latest installed version.',
+    });
+  }
+
+  try {
+    const ghRes = await fetch(`https://api.github.com/repos/${repoSlug}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Kinetix-App' },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!ghRes.ok) {
+      return res.json({
+        currentVersion,
+        updateAvailable: false,
+        latestVersion: currentVersion,
+        offlineMode: isOfflineStorageActive(),
+        message: 'Connected locally. No new releases published yet.',
+      });
+    }
+    const release = (await ghRes.json()) as { tag_name?: string; html_url?: string };
+    const latest = (release.tag_name || currentVersion).replace(/^v/i, '');
+    const updateAvailable = latest !== currentVersion;
+    return res.json({
+      currentVersion,
+      latestVersion: latest,
+      updateAvailable,
+      releaseUrl: release.html_url || null,
+      offlineMode: isOfflineStorageActive(),
+      message: updateAvailable
+        ? `Version ${latest} is ready on GitHub.`
+        : `You are up to date (v${currentVersion}).`,
+    });
+  } catch {
+    return res.json({
+      currentVersion,
+      updateAvailable: false,
+      latestVersion: currentVersion,
+      offlineMode: isOfflineStorageActive(),
+      message: 'Offline mode active — your local club data is safely stored on this computer.',
+    });
+  }
 });
 
 async function resolveDbUser(req: AuthRequest) {
+  if (isOfflineStorageActive()) {
+    return {
+      id: 1,
+      uid: 'local-company',
+      email: 'club@localhost',
+      displayName: process.env.KINETIX_COMPANY_NAME?.trim() || 'Club Operator',
+    };
+  }
   const uid = req.user?.uid;
   const email = req.user?.email || 'operator@kinetix.club';
   const name = (req.user?.name as string | undefined) || email.split('@')[0] || 'Devon Brooks';
@@ -475,9 +559,20 @@ app.post('/api/agent/chat', requireAuth, async (req: AuthRequest, res) => {
       persona?: AgentPersona;
     };
 
-    if (!message || !message.trim()) {
+    const safeMessage = sanitizePlainText(message, 4000);
+    if (!safeMessage) {
       return res.status(400).json({ error: 'Please type or speak a question first.' });
     }
+
+    const safeHistory = Array.isArray(history)
+      ? history
+          .slice(-20)
+          .map((item) => ({
+            role: item.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+            content: sanitizePlainText(item.content, 4000),
+          }))
+          .filter((item) => item.content.length > 0)
+      : [];
 
     const agentResult = await runGymAgentChat({
       userId: dbUser.id,
@@ -485,8 +580,8 @@ app.post('/api/agent/chat', requireAuth, async (req: AuthRequest, res) => {
       actorRole: activeRole || 'Director',
       activeFacilityId: activeFacilityId || 'soho',
       persona: persona || 'Club Manager',
-      history: history || [],
-      message: message.trim(),
+      history: safeHistory,
+      message: safeMessage,
     });
 
     const workspace = agentResult.didMutate ? await loadWorkspaceData(dbUser.id) : undefined;
@@ -546,6 +641,7 @@ app.post('/api/agent/speak', requireAuth, async (req: AuthRequest, res) => {
 
 async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
+  const HOST = process.env.HOST?.trim() || '0.0.0.0';
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -561,8 +657,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Kinetix server listening on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Kinetix server listening on http://${HOST}:${PORT}`);
   });
 }
 

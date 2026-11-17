@@ -16,7 +16,7 @@ import {
   updateConfigDb,
   updateLeadDb,
   updateMemberDb,
-} from '../db/crmRepo.ts';
+} from '../db/repo.ts';
 import type {
   AgentPersona,
   AgentToolAction,
