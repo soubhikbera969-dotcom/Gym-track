@@ -15,11 +15,11 @@ if errorlevel 1 (
 )
 
 echo [1/5] Installing application dependencies...
-call npm install --no-audit --no-fund
+call npm install --legacy-peer-deps --no-audit --no-fund
 if errorlevel 1 goto :error
 
 echo [2/5] Installing Windows desktop packager...
-call npm install --no-save --no-audit --no-fund electron electron-builder
+call npm install --no-save --legacy-peer-deps --no-audit --no-fund electron electron-builder
 if errorlevel 1 goto :error
 
 echo [3/5] Building web interface...
@@ -31,7 +31,7 @@ call npm run build:desktop-server
 if errorlevel 1 goto :error
 
 echo [5/5] Packaging one-click Windows installer (.exe)...
-call npx electron-builder --win --config electron-builder.yml --publish never
+call npx electron-builder --win --config electron-builder.yml -c.publish=null --publish never
 if errorlevel 1 goto :error
 
 echo.

@@ -2,6 +2,7 @@ appId: com.kinetix.gymops
 productName: Kinetix
 copyright: Copyright © 2026 Kinetix
 asar: false
+npmRebuild: false
 directories:
   output: release
 files:
