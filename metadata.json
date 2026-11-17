@@ -1,0 +1,6 @@
+{
+  "name": "Kinetix — Athletic Operations & 3D Studio Command Center",
+  "description": "High-performance fitness enterprise operations dashboard with real-time 3D gym floor telemetry, member lifecycle management, and studio scheduling.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
