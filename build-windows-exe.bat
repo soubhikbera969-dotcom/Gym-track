@@ -14,19 +14,23 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/4] Installing application dependencies...
-call npm install
+echo [1/5] Installing application dependencies...
+call npm install --no-audit --no-fund
 if errorlevel 1 goto :error
 
-echo [2/4] Installing Windows desktop packager...
-call npm install --no-save electron electron-builder
+echo [2/5] Installing Windows desktop packager...
+call npm install --no-save --no-audit --no-fund electron electron-builder
 if errorlevel 1 goto :error
 
-echo [3/4] Building web interface...
+echo [3/5] Building web interface...
 call npm run build
 if errorlevel 1 goto :error
 
-echo [4/4] Packaging one-click Windows installer (.exe)...
+echo [4/5] Building desktop server bundle...
+call npm run build:desktop-server
+if errorlevel 1 goto :error
+
+echo [5/5] Packaging one-click Windows installer (.exe)...
 call npx electron-builder --win --config electron-builder.yml --publish never
 if errorlevel 1 goto :error
 

@@ -6,11 +6,9 @@ directories:
   output: release
 files:
   - dist/**/*
+  - dist-server/**/*
   - electron/**/*
-  - server.ts
-  - src/**/*
   - package.json
-  - "!src/**/*.test.*"
   - "!**/.env*"
   - "!release/**/*"
 win:

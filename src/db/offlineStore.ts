@@ -36,6 +36,30 @@ import type {
 } from '../types/gym.ts';
 import type { WorkspacePayload } from './crmRepo.ts';
 
+export type OfflineLoginProvider = 'google' | 'phone' | 'microsoft';
+
+interface StoredOfflineProfile {
+  numericId: number;
+  profileId: string;
+  provider: OfflineLoginProvider;
+  identifier: string;
+  displayName: string;
+  pinHash?: string;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+export interface OfflineProfileSummary {
+  numericId: number;
+  profileId: string;
+  provider: OfflineLoginProvider;
+  identifier: string;
+  displayName: string;
+  hasPin: boolean;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
 function nowTimeStr() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -81,6 +105,262 @@ function getVaultEncryptionKey(): Buffer {
     fs.writeFileSync(saltFile, salt, { encoding: 'utf8', mode: 0o600 });
   }
   return crypto.scryptSync(secret, salt, 32);
+}
+
+function encryptEnvelope(plaintext: string): string {
+  const key = getVaultEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    v: 1,
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    data: encrypted.toString('base64'),
+  });
+}
+
+function decryptEnvelope(raw: string): string {
+  const envelope = JSON.parse(raw) as {
+    v: number;
+    iv: string;
+    tag: string;
+    data: string;
+  };
+  const key = getVaultEncryptionKey();
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(envelope.iv, 'base64')
+  );
+  decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(envelope.data, 'base64')),
+    decipher.final(),
+  ]).toString('utf8');
+}
+
+function writeEncryptedAtomic(filePath: string, payload: unknown): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const tmpPath = `${filePath}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  const envelope = encryptEnvelope(JSON.stringify(payload));
+  fs.writeFileSync(tmpPath, envelope, { encoding: 'utf8', mode: 0o600 });
+  fs.renameSync(tmpPath, filePath);
+}
+
+function readEncryptedFile<T>(filePath: string): T {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  return JSON.parse(decryptEnvelope(raw)) as T;
+}
+
+function hashPin(pin: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(pin, salt, 32).toString('hex');
+  return `${salt}:${derived}`;
+}
+
+function verifyPin(pin: string, storedHash: string): boolean {
+  const [salt, hex] = storedHash.split(':');
+  if (!salt || !hex) return false;
+  const candidate = crypto.scryptSync(pin, salt, 32);
+  const target = Buffer.from(hex, 'hex');
+  if (candidate.length !== target.length) return false;
+  return crypto.timingSafeEqual(candidate, target);
+}
+
+function getProfilesIndexPath(): string {
+  return path.join(resolveDataDir(), 'profiles-index.enc');
+}
+
+function toProfileSummary(p: StoredOfflineProfile): OfflineProfileSummary {
+  return {
+    numericId: p.numericId,
+    profileId: p.profileId,
+    provider: p.provider,
+    identifier: p.identifier,
+    displayName: p.displayName,
+    hasPin: Boolean(p.pinHash),
+    createdAt: p.createdAt,
+    lastActiveAt: p.lastActiveAt,
+  };
+}
+
+function readProfilesIndex(): StoredOfflineProfile[] {
+  const indexPath = getProfilesIndexPath();
+  if (!fs.existsSync(indexPath)) {
+    return [];
+  }
+  const list = readEncryptedFile<StoredOfflineProfile[]>(indexPath);
+  return Array.isArray(list) ? list : [];
+}
+
+function saveProfilesIndex(profiles: StoredOfflineProfile[]): void {
+  writeEncryptedAtomic(getProfilesIndexPath(), profiles);
+}
+
+let profileIndexQueue: Promise<unknown> = Promise.resolve();
+
+function withProfileIndexLock<T>(fn: () => T | Promise<T>): Promise<T> {
+  const next = profileIndexQueue.then(() => fn());
+  profileIndexQueue = next.catch(() => undefined);
+  return next;
+}
+
+function normalizeIdentifier(provider: OfflineLoginProvider, raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error('Please enter your account identifier.');
+  }
+  if (provider === 'phone') {
+    const cleaned = trimmed.replace(/[^\d+]/g, '');
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      throw new Error('Please enter a valid phone number (7 to 15 digits, including country code).');
+    }
+    return cleaned.startsWith('+') ? cleaned : `+${digitsOnly}`;
+  }
+  const lower = trimmed.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) {
+    throw new Error(
+      provider === 'google'
+        ? 'Please enter a valid Gmail or Google Workspace email address.'
+        : 'Please enter a valid Microsoft account email address.'
+    );
+  }
+  return lower;
+}
+
+export async function listOfflineProfiles(): Promise<OfflineProfileSummary[]> {
+  return withProfileIndexLock(() => {
+    const list = readProfilesIndex();
+    return list
+      .slice()
+      .sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
+      .map(toProfileSummary);
+  });
+}
+
+export async function getOfflineProfileById(profileId: string): Promise<OfflineProfileSummary | null> {
+  const cleanId = profileId.trim();
+  if (!/^[a-f0-9]{24}$/.test(cleanId)) return null;
+  return withProfileIndexLock(() => {
+    const found = readProfilesIndex().find((p) => p.profileId === cleanId);
+    return found ? toProfileSummary(found) : null;
+  });
+}
+
+export async function loginOrCreateOfflineProfile(input: {
+  provider: OfflineLoginProvider;
+  identifier: string;
+  displayName?: string;
+  pin?: string;
+}): Promise<OfflineProfileSummary> {
+  if (!['google', 'phone', 'microsoft'].includes(input.provider)) {
+    throw new Error('Unsupported login method.');
+  }
+  const normalized = normalizeIdentifier(input.provider, input.identifier);
+  const profileId = crypto
+    .createHash('sha256')
+    .update(`${input.provider}:${normalized}`)
+    .digest('hex')
+    .slice(0, 24);
+  const cleanPin = input.pin?.trim() || '';
+
+  return withProfileIndexLock(() => {
+    const profiles = readProfilesIndex();
+    const existing = profiles.find((p) => p.profileId === profileId);
+    const now = new Date().toISOString();
+
+    if (existing) {
+      if (existing.pinHash) {
+        if (!cleanPin || !verifyPin(cleanPin, existing.pinHash)) {
+          throw new Error('Incorrect passcode for this profile.');
+        }
+      }
+      if (input.displayName?.trim()) {
+        existing.displayName = input.displayName.trim().slice(0, 64);
+      }
+      existing.lastActiveAt = now;
+      saveProfilesIndex(profiles);
+      return toProfileSummary(existing);
+    }
+
+    if (cleanPin && cleanPin.length < 4) {
+      throw new Error('Passcode must be at least 4 characters (or leave blank for quick unlock).');
+    }
+
+    const nextNumericId =
+      profiles.reduce((max, p) => Math.max(max, p.numericId), 0) + 1;
+    const defaultLabel =
+      input.provider === 'phone'
+        ? normalized
+        : normalized.split('@')[0] || 'Club Operator';
+
+    const created: StoredOfflineProfile = {
+      numericId: nextNumericId,
+      profileId,
+      provider: input.provider,
+      identifier: normalized,
+      displayName: (input.displayName?.trim() || defaultLabel).slice(0, 64),
+      pinHash: cleanPin ? hashPin(cleanPin) : undefined,
+      createdAt: now,
+      lastActiveAt: now,
+    };
+
+    // Migrate legacy single-company vault into first created profile if present
+    const legacyVault = path.join(resolveDataDir(), 'company-workspace.enc');
+    const newVault = getProfileVaultPath(created.profileId);
+    if (nextNumericId === 1 && fs.existsSync(legacyVault) && !fs.existsSync(newVault)) {
+      fs.mkdirSync(path.dirname(newVault), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(legacyVault, newVault);
+      fs.chmodSync(newVault, 0o600);
+    }
+
+    profiles.push(created);
+    saveProfilesIndex(profiles);
+    return toProfileSummary(created);
+  });
+}
+
+export async function switchOfflineProfile(input: {
+  profileId: string;
+  pin?: string;
+}): Promise<OfflineProfileSummary> {
+  const cleanId = input.profileId.trim();
+  if (!/^[a-f0-9]{24}$/.test(cleanId)) {
+    throw new Error('Invalid profile identifier.');
+  }
+  const cleanPin = input.pin?.trim() || '';
+
+  return withProfileIndexLock(() => {
+    const profiles = readProfilesIndex();
+    const existing = profiles.find((p) => p.profileId === cleanId);
+    if (!existing) {
+      throw new Error('Profile not found on this device.');
+    }
+    if (existing.pinHash && (!cleanPin || !verifyPin(cleanPin, existing.pinHash))) {
+      throw new Error('Incorrect passcode for this profile.');
+    }
+    existing.lastActiveAt = new Date().toISOString();
+    saveProfilesIndex(profiles);
+    return toProfileSummary(existing);
+  });
+}
+
+function resolveProfileIdByNumericId(profileNumId: number): string {
+  const profiles = readProfilesIndex();
+  const match = profiles.find((p) => p.numericId === profileNumId);
+  if (match) return match.profileId;
+  return `profile-${Math.max(1, Math.floor(profileNumId))}`;
+}
+
+function getProfileVaultPath(profileId: string): string {
+  const safeId = profileId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) throw new Error('Invalid profile storage path.');
+  return path.join(resolveDataDir(), 'profiles', safeId, 'workspace.enc');
 }
 
 function buildSeedWorkspace(): WorkspacePayload {
@@ -135,70 +415,40 @@ function buildSeedWorkspace(): WorkspacePayload {
   });
 }
 
-function getVaultFilePath(): string {
-  return path.join(resolveDataDir(), 'company-workspace.enc');
-}
-
-function readEncryptedWorkspace(): WorkspacePayload {
-  const filePath = getVaultFilePath();
+function readEncryptedWorkspace(profileNumId: number): WorkspacePayload {
+  const profileId = resolveProfileIdByNumericId(profileNumId);
+  const filePath = getProfileVaultPath(profileId);
   if (!fs.existsSync(filePath)) {
     const initial = buildSeedWorkspace();
-    writeEncryptedWorkspace(initial);
+    writeEncryptedAtomic(filePath, initial);
     return initial;
   }
-
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const envelope = JSON.parse(raw) as {
-    v: number;
-    iv: string;
-    tag: string;
-    data: string;
-  };
-  const key = getVaultEncryptionKey();
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    key,
-    Buffer.from(envelope.iv, 'base64')
-  );
-  decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(envelope.data, 'base64')),
-    decipher.final(),
-  ]).toString('utf8');
-  return JSON.parse(decrypted) as WorkspacePayload;
+  return readEncryptedFile<WorkspacePayload>(filePath);
 }
 
-function writeEncryptedWorkspace(payload: WorkspacePayload): void {
-  const filePath = getVaultFilePath();
-  const tmpPath = `${filePath}.tmp`;
-  const key = getVaultEncryptionKey();
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const plaintext = JSON.stringify(payload);
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  const envelope = JSON.stringify({
-    v: 1,
-    iv: iv.toString('base64'),
-    tag: tag.toString('base64'),
-    data: encrypted.toString('base64'),
-  });
-
-  fs.writeFileSync(tmpPath, envelope, { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(tmpPath, filePath);
+function writeEncryptedWorkspace(profileNumId: number, payload: WorkspacePayload): void {
+  const profileId = resolveProfileIdByNumericId(profileNumId);
+  const filePath = getProfileVaultPath(profileId);
+  writeEncryptedAtomic(filePath, payload);
 }
 
-let writeQueue: Promise<unknown> = Promise.resolve();
+const profileWriteQueues = new Map<number, Promise<unknown>>();
 
-function withOfflineWrite<T>(fn: (ws: WorkspacePayload) => T | Promise<T>): Promise<T> {
-  const next = writeQueue.then(async () => {
-    const ws = readEncryptedWorkspace();
+function withOfflineWrite<T>(
+  profileNumId: number,
+  fn: (ws: WorkspacePayload) => T | Promise<T>
+): Promise<T> {
+  const prior = profileWriteQueues.get(profileNumId) || Promise.resolve();
+  const next = prior.then(async () => {
+    const ws = readEncryptedWorkspace(profileNumId);
     const res = await fn(ws);
-    writeEncryptedWorkspace(ws);
+    writeEncryptedWorkspace(profileNumId, ws);
     return res;
   });
-  writeQueue = next.catch(() => undefined);
+  profileWriteQueues.set(
+    profileNumId,
+    next.catch(() => undefined)
+  );
   return next;
 }
 
@@ -256,40 +506,45 @@ function pushNotification(
   return notif;
 }
 
-export async function loadWorkspaceOffline(): Promise<WorkspacePayload> {
-  return readEncryptedWorkspace();
+export async function loadWorkspaceOffline(profileNumId: number): Promise<WorkspacePayload> {
+  return readEncryptedWorkspace(profileNumId);
 }
 
 export async function appendAuditOffline(
+  profileNumId: number,
   actor: string,
   role: UserRole,
   category: AuditEntry['category'],
   action: string,
   target: string
 ): Promise<AuditEntry> {
-  return withOfflineWrite((ws) => pushAudit(ws, actor, role, category, action, target));
+  return withOfflineWrite(profileNumId, (ws) => pushAudit(ws, actor, role, category, action, target));
 }
 
-export async function createNotificationOffline(input: {
-  category: NotificationCategory;
-  channel: NotificationChannel;
-  severity: 'info' | 'warning' | 'critical';
-  recipientName: string;
-  recipientEmail: string;
-  title: string;
-  message: string;
-  status?: 'unread' | 'read' | 'sent';
-  targetScreen: ScreenView;
-  ruleKey: string;
-}): Promise<GymNotification> {
-  return withOfflineWrite((ws) => pushNotification(ws, input));
+export async function createNotificationOffline(
+  profileNumId: number,
+  input: {
+    category: NotificationCategory;
+    channel: NotificationChannel;
+    severity: 'info' | 'warning' | 'critical';
+    recipientName: string;
+    recipientEmail: string;
+    title: string;
+    message: string;
+    status?: 'unread' | 'read' | 'sent';
+    targetScreen: ScreenView;
+    ruleKey: string;
+  }
+): Promise<GymNotification> {
+  return withOfflineWrite(profileNumId, (ws) => pushNotification(ws, input));
 }
 
 export async function updateConfigOffline(
+  profileNumId: number,
   patch: Partial<GymConfig> & { activeRole?: UserRole; activeFacilityId?: string },
   actorName: string
 ): Promise<void> {
-  await withOfflineWrite((ws) => {
+  await withOfflineWrite(profileNumId, (ws) => {
     if (patch.operatingHours !== undefined) ws.config.operatingHours = patch.operatingHours;
     if (patch.maxOccupancyThresholdPct !== undefined)
       ws.config.maxOccupancyThresholdPct = patch.maxOccupancyThresholdPct;
@@ -301,18 +556,19 @@ export async function updateConfigOffline(
       ws.config.requireSignedWaiver = patch.requireSignedWaiver;
     if (patch.activeRole !== undefined) ws.activeRole = patch.activeRole;
     if (patch.activeFacilityId !== undefined) ws.activeFacilityId = patch.activeFacilityId;
-    pushAudit(ws, actorName, ws.activeRole, 'System', 'Updated club settings', 'Local Company Settings');
+    pushAudit(ws, actorName, ws.activeRole, 'System', 'Updated club settings', 'Local Profile Vault');
   });
 }
 
 export async function recordCheckInOffline(
+  profileNumId: number,
   memberId: string,
   zoneId: ZoneId,
   facilityId: string,
   actorName: string,
   actorRole: UserRole
 ): Promise<CheckInLog> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const member = ws.members.find((m) => m.id === memberId);
     if (!member) throw new Error(`Member ${memberId} not found.`);
     const facZones = ws.zonesByFacility[facilityId] || ws.zonesByFacility.soho || [];
@@ -349,11 +605,12 @@ export async function recordCheckInOffline(
 }
 
 export async function adjustZoneOccupancyOffline(
+  profileNumId: number,
   facilityId: string,
   zoneKey: ZoneId,
   delta: number
 ): Promise<GymZone> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const facZones = ws.zonesByFacility[facilityId] || ws.zonesByFacility.soho || [];
     const zone = facZones.find((z) => z.id === zoneKey);
     if (!zone) throw new Error(`Zone ${zoneKey} not found.`);
@@ -363,12 +620,13 @@ export async function adjustZoneOccupancyOffline(
 }
 
 export async function cycleEquipmentStatusOffline(
+  profileNumId: number,
   externalId: string,
   actorName: string,
   actorRole: UserRole,
   explicitStatus?: EquipmentStatus
 ): Promise<EquipmentItem> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const eq = ws.equipment.find((e) => e.id === externalId);
     if (!eq) throw new Error(`Equipment ${externalId} not found.`);
     const order: EquipmentStatus[] = ['Operational', 'In Use', 'Maintenance'];
@@ -379,11 +637,12 @@ export async function cycleEquipmentStatusOffline(
 }
 
 export async function createMemberOffline(
+  profileNumId: number,
   member: Member,
   actorName: string,
   actorRole: UserRole
 ): Promise<Member> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     ws.members = [member, ...ws.members];
     ws.transactions = [
       {
@@ -404,12 +663,13 @@ export async function createMemberOffline(
 }
 
 export async function updateMemberOffline(
+  profileNumId: number,
   updated: Member,
   auditSummary: string,
   actorName: string,
   actorRole: UserRole
 ): Promise<Member> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const idx = ws.members.findIndex((m) => m.id === updated.id);
     if (idx === -1) throw new Error(`Member ${updated.id} not found.`);
     ws.members[idx] = updated;
@@ -419,23 +679,25 @@ export async function updateMemberOffline(
 }
 
 export async function importMembersOffline(
+  profileNumId: number,
   imported: Member[],
   facilityName: string,
   actorName: string,
   actorRole: UserRole
 ): Promise<void> {
-  await withOfflineWrite((ws) => {
+  await withOfflineWrite(profileNumId, (ws) => {
     ws.members = [...imported, ...ws.members];
     pushAudit(ws, actorName, actorRole, 'Member', `Imported ${imported.length} CSV members`, facilityName);
   });
 }
 
 export async function createLeadOffline(
+  profileNumId: number,
   lead: Lead,
   actorName: string,
   actorRole: UserRole
 ): Promise<Lead> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     ws.leads = [lead, ...ws.leads];
     pushAudit(ws, actorName, actorRole, 'Lead', 'Added new prospect', `${lead.name} (${lead.source})`);
     return lead;
@@ -443,12 +705,13 @@ export async function createLeadOffline(
 }
 
 export async function updateLeadOffline(
+  profileNumId: number,
   updated: Lead,
   auditSummary: string,
   actorName: string,
   actorRole: UserRole
 ): Promise<Lead> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const idx = ws.leads.findIndex((l) => l.id === updated.id);
     if (idx === -1) throw new Error(`Lead ${updated.id} not found.`);
     ws.leads[idx] = updated;
@@ -458,11 +721,12 @@ export async function updateLeadOffline(
 }
 
 export async function convertLeadOffline(
+  profileNumId: number,
   leadExternalId: string,
   actorName: string,
   actorRole: UserRole
 ): Promise<Member> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const lead = ws.leads.find((l) => l.id === leadExternalId);
     if (!lead) throw new Error(`Lead ${leadExternalId} not found.`);
     lead.stage = 'Converted';
@@ -537,11 +801,12 @@ export async function convertLeadOffline(
 }
 
 export async function createPlanOffline(
+  profileNumId: number,
   plan: MembershipPlan,
   actorName: string,
   actorRole: UserRole
 ): Promise<MembershipPlan> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     ws.plans = [...ws.plans, plan];
     pushAudit(ws, actorName, actorRole, 'Billing', 'Created membership plan', plan.name);
     return plan;
@@ -549,12 +814,13 @@ export async function createPlanOffline(
 }
 
 export async function performSubscriptionActionOffline(
+  profileNumId: number,
   memberExternalId: string,
   action: 'renew' | 'freeze' | 'cancel' | 'retry',
   actorName: string,
   actorRole: UserRole
 ): Promise<string> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const target = ws.members.find((m) => m.id === memberExternalId);
     if (!target) throw new Error(`Member ${memberExternalId} not found.`);
     const statusMap: Record<
@@ -590,11 +856,12 @@ export async function performSubscriptionActionOffline(
 }
 
 export async function createSessionOffline(
+  profileNumId: number,
   session: StudioSession,
   actorName: string,
   actorRole: UserRole
 ): Promise<StudioSession> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     ws.sessions = [...ws.sessions, session];
     pushAudit(ws, actorName, actorRole, 'Schedule', 'Published new studio session', `${session.title} (${session.startTime})`);
     return session;
@@ -602,13 +869,14 @@ export async function createSessionOffline(
 }
 
 export async function performSessionActionOffline(
+  profileNumId: number,
   sessionExternalId: string,
   action: 'enroll' | 'waitlist' | 'promote' | 'cancel',
   actorName: string,
   actorRole: UserRole,
   athleteName?: string
 ): Promise<string> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const s = ws.sessions.find((ses) => ses.id === sessionExternalId);
     if (!s) throw new Error(`Session ${sessionExternalId} not found.`);
     let msg = '';
@@ -663,11 +931,12 @@ export async function performSessionActionOffline(
 }
 
 export async function createStaffOffline(
+  profileNumId: number,
   member: StaffMember,
   actorName: string,
   actorRole: UserRole
 ): Promise<StaffMember> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     ws.staff = [...ws.staff, member];
     pushAudit(ws, actorName, actorRole, 'System', 'Added team member', `${member.name} (${member.role})`);
     return member;
@@ -675,10 +944,11 @@ export async function createStaffOffline(
 }
 
 export async function evaluateAutomatedNotificationsOffline(
+  profileNumId: number,
   actorName: string,
   actorRole: UserRole
 ): Promise<{ created: GymNotification[]; evaluatedCount: number }> {
-  return withOfflineWrite((ws) => {
+  return withOfflineWrite(profileNumId, (ws) => {
     const existingKeys = new Set(ws.notifications.map((n) => n.ruleKey));
     const created: GymNotification[] = [];
 
@@ -757,10 +1027,11 @@ export async function evaluateAutomatedNotificationsOffline(
 }
 
 export async function updateNotificationStatusOffline(
+  profileNumId: number,
   externalId: string,
   status: 'unread' | 'read' | 'sent'
 ): Promise<void> {
-  await withOfflineWrite((ws) => {
+  await withOfflineWrite(profileNumId, (ws) => {
     const n = ws.notifications.find((item) => item.id === externalId);
     if (n) n.status = status;
   });

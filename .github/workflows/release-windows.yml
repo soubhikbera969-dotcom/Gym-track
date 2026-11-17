@@ -2,6 +2,9 @@ name: Build & Publish Windows One-Click Installer
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - "v*"
   workflow_dispatch:
@@ -20,28 +23,57 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+
+      - name: Read app version
+        id: meta
+        shell: pwsh
+        run: |
+          $pkg = Get-Content -Raw -Path package.json | ConvertFrom-Json
+          $ver = $pkg.version
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $tag = "v$ver"
+          }
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
-      - name: Install Windows packager
-        run: npm install --no-save electron electron-builder
+      - name: Install Windows desktop packager
+        run: npm install --no-save --no-audit --no-fund electron electron-builder
 
-      - name: Build web assets
-        run: npm run build
+      - name: Build web assets and desktop server
+        run: |
+          npm run build
+          npm run build:desktop-server
 
-      - name: Build & Publish One-Click Windows .exe (Release Tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Package Windows one-click installer (.exe)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --config electron-builder.yml --publish always
 
-      - name: Build One-Click Windows .exe (Manual Run)
-        if: "!startsWith(github.ref, 'refs/tags/')"
-        run: npx electron-builder --win --config electron-builder.yml --publish never
+      - name: Publish to GitHub Releases section
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Kinetix ${{ steps.meta.outputs.tag }} (Windows Installer)
+          body: |
+            Download **Kinetix-Setup-${{ steps.meta.outputs.version }}.exe** below and double-click to install in one click on Windows.
+            All club data stays stored locally and encrypted per Gmail profile on your computer, and installed copies check GitHub Releases automatically for future updates.
+          draft: false
+          prerelease: false
+          make_latest: true
+          overwrite_files: true
+          files: |
+            release/Kinetix-Setup-*.exe
+            release/*.blockmap
+            release/latest.yml
 
-      - name: Upload Windows .exe Artifact
+      - name: Upload Windows .exe workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: kinetix-windows-installer

@@ -2,10 +2,18 @@ import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { DecodedIdToken } from 'firebase-admin/auth';
 import { adminAuth } from '../lib/firebase-admin.ts';
+import { getOfflineProfileById } from '../db/offlineStore.ts';
 import { isOfflineStorageActive } from '../db/repo.ts';
 
 export interface AuthRequest extends Request {
-  user?: Partial<DecodedIdToken> & { uid: string; email?: string; name?: string };
+  user?: Partial<DecodedIdToken> & {
+    uid: string;
+    email?: string;
+    name?: string;
+    phone_number?: string;
+    profileNumId?: number;
+    provider?: 'google' | 'phone' | 'microsoft';
+  };
 }
 
 function timingSafeMatch(a: string, b: string): boolean {
@@ -14,6 +22,22 @@ function timingSafeMatch(a: string, b: string): boolean {
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
 }
+
+export const requireLocalDesktopToken = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!isOfflineStorageActive()) {
+    return res.status(404).json({ error: 'Offline profiles are only enabled in desktop offline mode.' });
+  }
+  const expectedToken = process.env.KINETIX_LOCAL_TOKEN?.trim();
+  const providedToken = req.header('x-kinetix-local-token')?.trim() || '';
+  if (!expectedToken || !providedToken || !timingSafeMatch(expectedToken, providedToken)) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid local desktop session.' });
+  }
+  return next();
+};
 
 export const requireAuth = async (
   req: AuthRequest,
@@ -26,10 +50,23 @@ export const requireAuth = async (
     if (!expectedToken || !providedToken || !timingSafeMatch(expectedToken, providedToken)) {
       return res.status(401).json({ error: 'Unauthorized: Invalid local desktop session.' });
     }
+
+    const profileId = req.header('x-kinetix-profile-id')?.trim() || '';
+    if (!profileId) {
+      return res.status(401).json({ error: 'Unauthorized: Please select or sign into a profile.' });
+    }
+
+    const profile = await getOfflineProfileById(profileId);
+    if (!profile) {
+      return res.status(401).json({ error: 'Unauthorized: Profile not found on this device.' });
+    }
+
     req.user = {
-      uid: 'local-company',
-      email: 'club@localhost',
-      name: process.env.KINETIX_COMPANY_NAME?.trim() || 'Club Operator',
+      uid: profile.profileId,
+      email: profile.identifier,
+      name: profile.displayName,
+      profileNumId: profile.numericId,
+      provider: profile.provider,
     };
     return next();
   }

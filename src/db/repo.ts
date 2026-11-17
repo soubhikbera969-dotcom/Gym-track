@@ -78,7 +78,7 @@ export async function appendAuditDb(
   target: string
 ): Promise<AuditEntry> {
   if (isOfflineStorageActive()) {
-    return appendAuditOffline(actor, role, category, action, target);
+    return appendAuditOffline(userId, actor, role, category, action, target);
   }
   return pgAppendAudit(userId, actor, role, category, action, target);
 }
@@ -99,14 +99,14 @@ export async function createNotificationDb(
   }
 ): Promise<GymNotification> {
   if (isOfflineStorageActive()) {
-    return createNotificationOffline(input);
+    return createNotificationOffline(userId, input);
   }
   return pgCreateNotification(userId, input);
 }
 
 export async function loadWorkspaceData(userId: number): Promise<WorkspacePayload> {
   if (isOfflineStorageActive()) {
-    return loadWorkspaceOffline();
+    return loadWorkspaceOffline(userId);
   }
   return pgLoadWorkspaceData(userId);
 }
@@ -117,7 +117,7 @@ export async function updateConfigDb(
   actorName: string
 ): Promise<void> {
   if (isOfflineStorageActive()) {
-    return updateConfigOffline(patch, actorName);
+    return updateConfigOffline(userId, patch, actorName);
   }
   return pgUpdateConfig(userId, patch, actorName);
 }
@@ -131,7 +131,7 @@ export async function recordCheckInDb(
   actorRole: UserRole
 ): Promise<CheckInLog> {
   if (isOfflineStorageActive()) {
-    return recordCheckInOffline(memberId, zoneId, facilityId, actorName, actorRole);
+    return recordCheckInOffline(userId, memberId, zoneId, facilityId, actorName, actorRole);
   }
   return pgRecordCheckIn(userId, memberId, zoneId, facilityId, actorName, actorRole);
 }
@@ -143,7 +143,7 @@ export async function adjustZoneOccupancyDb(
   delta: number
 ): Promise<GymZone> {
   if (isOfflineStorageActive()) {
-    return adjustZoneOccupancyOffline(facilityId, zoneKey, delta);
+    return adjustZoneOccupancyOffline(userId, facilityId, zoneKey, delta);
   }
   return pgAdjustZoneOccupancy(userId, facilityId, zoneKey, delta);
 }
@@ -156,7 +156,7 @@ export async function cycleEquipmentStatusDb(
   explicitStatus?: EquipmentStatus
 ): Promise<EquipmentItem> {
   if (isOfflineStorageActive()) {
-    return cycleEquipmentStatusOffline(externalId, actorName, actorRole, explicitStatus);
+    return cycleEquipmentStatusOffline(userId, externalId, actorName, actorRole, explicitStatus);
   }
   return pgCycleEquipmentStatus(userId, externalId, actorName, actorRole, explicitStatus);
 }
@@ -168,7 +168,7 @@ export async function createMemberDb(
   actorRole: UserRole
 ): Promise<Member> {
   if (isOfflineStorageActive()) {
-    return createMemberOffline(member, actorName, actorRole);
+    return createMemberOffline(userId, member, actorName, actorRole);
   }
   return pgCreateMember(userId, member, actorName, actorRole);
 }
@@ -181,7 +181,7 @@ export async function updateMemberDb(
   actorRole: UserRole
 ): Promise<Member> {
   if (isOfflineStorageActive()) {
-    return updateMemberOffline(updated, auditSummary, actorName, actorRole);
+    return updateMemberOffline(userId, updated, auditSummary, actorName, actorRole);
   }
   return pgUpdateMember(userId, updated, auditSummary, actorName, actorRole);
 }
@@ -194,7 +194,7 @@ export async function importMembersDb(
   actorRole: UserRole
 ): Promise<void> {
   if (isOfflineStorageActive()) {
-    return importMembersOffline(imported, facilityName, actorName, actorRole);
+    return importMembersOffline(userId, imported, facilityName, actorName, actorRole);
   }
   return pgImportMembers(userId, imported, facilityName, actorName, actorRole);
 }
@@ -206,7 +206,7 @@ export async function createLeadDb(
   actorRole: UserRole
 ): Promise<Lead> {
   if (isOfflineStorageActive()) {
-    return createLeadOffline(lead, actorName, actorRole);
+    return createLeadOffline(userId, lead, actorName, actorRole);
   }
   return pgCreateLead(userId, lead, actorName, actorRole);
 }
@@ -219,7 +219,7 @@ export async function updateLeadDb(
   actorRole: UserRole
 ): Promise<Lead> {
   if (isOfflineStorageActive()) {
-    return updateLeadOffline(updated, auditSummary, actorName, actorRole);
+    return updateLeadOffline(userId, updated, auditSummary, actorName, actorRole);
   }
   return pgUpdateLead(userId, updated, auditSummary, actorName, actorRole);
 }
@@ -231,7 +231,7 @@ export async function convertLeadDb(
   actorRole: UserRole
 ): Promise<Member> {
   if (isOfflineStorageActive()) {
-    return convertLeadOffline(leadExternalId, actorName, actorRole);
+    return convertLeadOffline(userId, leadExternalId, actorName, actorRole);
   }
   return pgConvertLead(userId, leadExternalId, actorName, actorRole);
 }
@@ -243,7 +243,7 @@ export async function createPlanDb(
   actorRole: UserRole
 ): Promise<MembershipPlan> {
   if (isOfflineStorageActive()) {
-    return createPlanOffline(plan, actorName, actorRole);
+    return createPlanOffline(userId, plan, actorName, actorRole);
   }
   return pgCreatePlan(userId, plan, actorName, actorRole);
 }
@@ -256,7 +256,7 @@ export async function performSubscriptionActionDb(
   actorRole: UserRole
 ): Promise<string> {
   if (isOfflineStorageActive()) {
-    return performSubscriptionActionOffline(memberExternalId, action, actorName, actorRole);
+    return performSubscriptionActionOffline(userId, memberExternalId, action, actorName, actorRole);
   }
   return pgPerformSubscriptionAction(userId, memberExternalId, action, actorName, actorRole);
 }
@@ -268,7 +268,7 @@ export async function createSessionDb(
   actorRole: UserRole
 ): Promise<StudioSession> {
   if (isOfflineStorageActive()) {
-    return createSessionOffline(session, actorName, actorRole);
+    return createSessionOffline(userId, session, actorName, actorRole);
   }
   return pgCreateSession(userId, session, actorName, actorRole);
 }
@@ -282,9 +282,23 @@ export async function performSessionActionDb(
   athleteName?: string
 ): Promise<string> {
   if (isOfflineStorageActive()) {
-    return performSessionActionOffline(sessionExternalId, action, actorName, actorRole, athleteName);
+    return performSessionActionOffline(
+      userId,
+      sessionExternalId,
+      action,
+      actorName,
+      actorRole,
+      athleteName
+    );
   }
-  return pgPerformSessionAction(userId, sessionExternalId, action, actorName, actorRole, athleteName);
+  return pgPerformSessionAction(
+    userId,
+    sessionExternalId,
+    action,
+    actorName,
+    actorRole,
+    athleteName
+  );
 }
 
 export async function createStaffDb(
@@ -294,7 +308,7 @@ export async function createStaffDb(
   actorRole: UserRole
 ): Promise<StaffMember> {
   if (isOfflineStorageActive()) {
-    return createStaffOffline(member, actorName, actorRole);
+    return createStaffOffline(userId, member, actorName, actorRole);
   }
   return pgCreateStaff(userId, member, actorName, actorRole);
 }
@@ -305,7 +319,7 @@ export async function evaluateAutomatedNotificationsDb(
   actorRole: UserRole
 ): Promise<{ created: GymNotification[]; evaluatedCount: number }> {
   if (isOfflineStorageActive()) {
-    return evaluateAutomatedNotificationsOffline(actorName, actorRole);
+    return evaluateAutomatedNotificationsOffline(userId, actorName, actorRole);
   }
   return pgEvaluateNotifications(userId, actorName, actorRole);
 }
@@ -316,7 +330,7 @@ export async function updateNotificationStatusDb(
   status: 'unread' | 'read' | 'sent'
 ): Promise<void> {
   if (isOfflineStorageActive()) {
-    return updateNotificationStatusOffline(externalId, status);
+    return updateNotificationStatusOffline(userId, externalId, status);
   }
   return pgUpdateNotificationStatus(userId, externalId, status);
 }

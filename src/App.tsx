@@ -230,6 +230,9 @@ export default function App() {
   useEffect(() => {
     if (user) {
       void loadWorkspace();
+    } else {
+      setAgentMessages([]);
+      setActiveScreen('overview');
     }
   }, [user, loadWorkspace]);
 
@@ -772,7 +775,8 @@ export default function App() {
     return <SignInGate />;
   }
 
-  const operatorName = user.displayName || user.email?.split('@')[0] || 'Devon Brooks';
+  const operatorName =
+    user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Club Operator';
   const operatorInitials = operatorName
     .split(/\s+/)
     .slice(0, 2)
@@ -873,8 +877,8 @@ export default function App() {
           <button
             type="button"
             onClick={() => void logout()}
-            title="Sign out"
-            aria-label="Sign out"
+            title="Switch profile or sign out"
+            aria-label="Switch profile or sign out"
             className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] cursor-pointer shrink-0"
           >
             <LogOut className="h-4 w-4" />
@@ -951,7 +955,7 @@ export default function App() {
                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#E2E8F0] py-2 text-xs font-semibold text-[#334155]"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Sign Out
+                Switch Profile / Sign Out
               </button>
             </div>
           </aside>

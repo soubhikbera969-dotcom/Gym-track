@@ -3,14 +3,19 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { createServer as createViteServer } from 'vite';
-import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth, requireLocalDesktopToken, AuthRequest } from './src/middleware/auth.ts';
 import {
   agentRateLimiter,
   sanitizePlainText,
   securityHeaders,
   writeRateLimiter,
 } from './src/middleware/security.ts';
+import {
+  listOfflineProfiles,
+  loginOrCreateOfflineProfile,
+  switchOfflineProfile,
+  type OfflineLoginProvider,
+} from './src/db/offlineStore.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { ensureWorkspaceSeeded } from './src/db/seed.ts';
 import {
@@ -58,8 +63,13 @@ import type {
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFileDir =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = fs.existsSync(path.join(currentFileDir, 'package.json'))
+  ? currentFileDir
+  : path.resolve(currentFileDir, '..');
 
 const app = express();
 app.disable('x-powered-by');
@@ -69,6 +79,9 @@ app.use('/api/crm', (req, res, next) =>
   req.method === 'GET' ? next() : writeRateLimiter(req, res, next)
 );
 app.use('/api/notifications', (req, res, next) =>
+  req.method === 'GET' ? next() : writeRateLimiter(req, res, next)
+);
+app.use('/api/offline', (req, res, next) =>
   req.method === 'GET' ? next() : writeRateLimiter(req, res, next)
 );
 app.use('/api/agent', agentRateLimiter);
@@ -83,7 +96,7 @@ function resolveGitHubRepoSlug(): string | null {
     return fromEnv;
   }
   try {
-    const pkgRaw = fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
+    const pkgRaw = fs.readFileSync(path.resolve(projectRoot, 'package.json'), 'utf8');
     const pkg = JSON.parse(pkgRaw) as { repository?: string | { url?: string } };
     const repoUrl = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url || '';
     const match = repoUrl.match(/github\.com[/:]([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(?:\.git)?$/i);
@@ -187,7 +200,7 @@ async function fetchLatestReleaseInfo(currentVersion: string) {
 
 function readPackageVersion(): string {
   try {
-    const pkgRaw = fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
+    const pkgRaw = fs.readFileSync(path.resolve(projectRoot, 'package.json'), 'utf8');
     const pkg = JSON.parse(pkgRaw) as { version?: string };
     if (pkg.version) return pkg.version;
   } catch {
@@ -211,18 +224,77 @@ app.get('/api/download/windows-exe', async (_req, res) => {
   return res.redirect(302, info.downloadUrl);
 });
 
+app.get('/api/offline/profiles', requireLocalDesktopToken, async (_req, res) => {
+  try {
+    const profiles = await listOfflineProfiles();
+    res.json({ profiles });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unable to load profiles on this device.',
+    });
+  }
+});
+
+app.post('/api/offline/profiles/login', requireLocalDesktopToken, async (req, res) => {
+  try {
+    const { provider, identifier, displayName, pin } = req.body as {
+      provider?: OfflineLoginProvider;
+      identifier?: string;
+      displayName?: string;
+      pin?: string;
+    };
+    if (!provider || !identifier) {
+      return res.status(400).json({ error: 'Login method and account identifier are required.' });
+    }
+    const profile = await loginOrCreateOfflineProfile({
+      provider,
+      identifier: sanitizePlainText(identifier, 120),
+      displayName: displayName ? sanitizePlainText(displayName, 64) : undefined,
+      pin,
+    });
+    res.json({ profile });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : 'Unable to sign into profile.',
+    });
+  }
+});
+
+app.post('/api/offline/profiles/switch', requireLocalDesktopToken, async (req, res) => {
+  try {
+    const { profileId, pin } = req.body as { profileId?: string; pin?: string };
+    if (!profileId) {
+      return res.status(400).json({ error: 'Profile ID is required.' });
+    }
+    const profile = await switchOfflineProfile({ profileId, pin });
+    res.json({ profile });
+  } catch (error) {
+    res.status(401).json({
+      error: error instanceof Error ? error.message : 'Unable to switch profile.',
+    });
+  }
+});
+
 async function resolveDbUser(req: AuthRequest) {
   if (isOfflineStorageActive()) {
+    if (!req.user?.profileNumId) {
+      throw new Error('Missing active offline profile.');
+    }
     return {
-      id: 1,
-      uid: 'local-company',
-      email: 'club@localhost',
-      displayName: process.env.KINETIX_COMPANY_NAME?.trim() || 'Club Operator',
+      id: req.user.profileNumId,
+      uid: req.user.uid,
+      email: req.user.email || 'club@localhost',
+      displayName: req.user.name || 'Club Operator',
     };
   }
   const uid = req.user?.uid;
-  const email = req.user?.email || 'operator@kinetix.club';
-  const name = (req.user?.name as string | undefined) || email.split('@')[0] || 'Devon Brooks';
+  const phone = req.user?.phone_number;
+  const email = req.user?.email || phone || `${uid}@phone.kinetix.local`;
+  const name =
+    (req.user?.name as string | undefined) ||
+    req.user?.email?.split('@')[0] ||
+    phone ||
+    'Kinetix Operator';
   if (!uid) {
     throw new Error('Missing authenticated user UID.');
   }
@@ -719,13 +791,14 @@ async function startServer() {
   const HOST = process.env.HOST?.trim() || '0.0.0.0';
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.resolve(__dirname, 'dist');
+    const distDir = path.resolve(projectRoot, 'dist');
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distDir, 'index.html'));

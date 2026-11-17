@@ -64,7 +64,7 @@ function findFreePort() {
   });
 }
 
-function waitForServer(port, retries = 40) {
+function waitForServer(port, getStderr, retries = 80) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     const check = () => {
@@ -72,11 +72,21 @@ function waitForServer(port, retries = 40) {
       const req = http.get(`http://127.0.0.1:${port}/api/health`, (res) => {
         res.resume();
         if (res.statusCode === 200) return resolve();
-        if (attempts >= retries) return reject(new Error('Local server did not become ready.'));
+        if (attempts >= retries) {
+          const detail = getStderr ? getStderr().trim() : '';
+          return reject(
+            new Error(detail ? `Local server did not become ready:\n${detail}` : 'Local server did not become ready.')
+          );
+        }
         setTimeout(check, 250);
       });
       req.on('error', () => {
-        if (attempts >= retries) return reject(new Error('Local server failed to start.'));
+        if (attempts >= retries) {
+          const detail = getStderr ? getStderr().trim() : '';
+          return reject(
+            new Error(detail ? `Local server failed to start:\n${detail}` : 'Local server failed to start.')
+          );
+        }
         setTimeout(check, 250);
       });
     };
@@ -143,16 +153,38 @@ async function createDesktopWindow() {
   };
   delete childEnv.SQL_HOST;
 
+  const bundledServer = path.join(appRoot, 'dist-server', 'server.cjs');
   const tsxCli = path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
   const serverEntry = path.join(appRoot, 'server.ts');
 
-  serverProcess = spawn(process.execPath, [tsxCli, serverEntry], {
+  const spawnArgs = fs.existsSync(bundledServer)
+    ? [bundledServer]
+    : [tsxCli, serverEntry];
+
+  let stderrBuffer = '';
+  serverProcess = spawn(process.execPath, spawnArgs, {
     cwd: appRoot,
     env: { ...childEnv, ELECTRON_RUN_AS_NODE: '1' },
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'],
   });
 
-  await waitForServer(port);
+  if (serverProcess.stderr) {
+    serverProcess.stderr.on('data', (chunk) => {
+      stderrBuffer = (stderrBuffer + chunk.toString('utf8')).slice(-4000);
+    });
+  }
+
+  serverProcess.on('exit', (code) => {
+    if (code && code !== 0 && stderrBuffer) {
+      try {
+        fs.writeFileSync(path.join(dataDir, 'startup-error.log'), stderrBuffer, 'utf8');
+      } catch {
+        // Ignore log write failure
+      }
+    }
+  });
+
+  await waitForServer(port, () => stderrBuffer);
 
   mainWindow = new BrowserWindow({
     width: 1400,

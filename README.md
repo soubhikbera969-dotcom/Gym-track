@@ -17,14 +17,15 @@ Each gym or company can run Kinetix **100% locally and offline** as a standalone
 - **Report Center (2D & 3D Analytics)**: Interactive 2D and Three.js 3D charts with filters, date comparisons, and exportable summaries across membership, revenue, attendance, retention, and sales.
 - **Automated Gym Communications**: Triggered in-app and email reminder rules for expiring memberships, upcoming bookings, waitlist openings, overdue follow-ups, and operational alerts.
 - **AI Club Concierge (Text & Voice)**: Plain-English operations assistant supporting both Groq and Google Gemini engines, selectable assistant styles, microphone voice transcription, and spoken audio replies.
-- **Encrypted Offline Company Storage**: Standalone desktop runs save every company's data locally on their own computer using AES-256-GCM encryption protected by Windows DPAPI (`safeStorage`).
-- **Automatic GitHub Updates**: Packaged Windows builds check GitHub Releases automatically when online and update smoothly without touching local company data.
+- **Multi-Profile Gmail Support**: Maintain multiple isolated user profiles on the same desktop or browser using Gmail / Google sign-in, keeping every profile's club records strictly separate.
+- **Encrypted Offline Company Storage**: Standalone desktop runs save every profile's data locally on the computer using AES-256-GCM encryption protected by Windows DPAPI (`safeStorage`), with optional per-profile passcode locks.
+- **Automatic GitHub Updates**: Packaged Windows builds check GitHub Releases automatically when online and update smoothly without touching local profile data.
 
 ---
 
 ## Security Architecture
 
-- **Encrypted Local Vault**: Offline company workspaces are stored locally on disk using AES-256-GCM authenticated encryption with per-save random IVs and OS-protected secrets.
+- **Encrypted Per-Profile Vaults**: Each offline profile workspace is isolated into its own AES-256-GCM encrypted vault on disk with per-save random IVs, OS-protected secrets, and optional scrypt-hashed profile passcodes.
 - **Isolated Desktop Runtime**: Electron runs with `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webSecurity: true`, blocked untrusted navigation, and a per-launch constant-time local session token bound strictly to `127.0.0.1`.
 - **Server & Export Hardening**: HTTP security headers, sliding-window rate limiting, input sanitization, and spreadsheet formula-injection neutralization across all CSV exports.
 
@@ -44,14 +45,10 @@ Each gym or company can run Kinetix **100% locally and offline** as a standalone
 
 Kinetix packages into a **one-click Windows NSIS installer** (`Kinetix-Setup-<version>.exe`): double-clicking the `.exe` installs Kinetix immediately without multi-step setup wizards, creates Desktop and Start Menu shortcuts, launches the app automatically, and keeps all encrypted local company data across updates.
 
-### Option A — Automated Build & Publish via GitHub
-1. Push this repository to **GitHub**.
-2. Create and push a release tag (for example, `v1.0.0`) or run the **Build & Publish Windows One-Click Installer** workflow from the **Actions** tab:
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-3. Download `Kinetix-Setup-1.0.0.exe` in one click from **GitHub Releases** (or from the **Windows Desktop App** section inside Kinetix Settings once connected).
+### Option A — Automated Build & Publish via GitHub Releases
+1. Push this repository to **GitHub** (`main` or `master` branch, or a `v*` tag).
+2. The **Build & Publish Windows One-Click Installer** GitHub Action runs automatically on Windows and publishes `Kinetix-Setup-1.0.0.exe` directly to the repository's **Releases** section.
+3. Anyone can open the repository's **Releases** section on GitHub (or use the **Windows Desktop App** section inside Kinetix Settings once connected) and click `Kinetix-Setup-1.0.0.exe` to download and install in one click.
 
 ### Option B — Build Directly on a Windows PC
 1. Download or clone the repository onto a Windows computer with Node.js 20+ installed.
