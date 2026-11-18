@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { requireAuth, requireLocalDesktopToken, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth, requireLocalDesktopToken, type AuthRequest } from './src/middleware/auth.ts';
 import {
   agentRateLimiter,
   sanitizePlainText,

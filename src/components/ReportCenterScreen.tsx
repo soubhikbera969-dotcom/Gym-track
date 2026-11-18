@@ -31,10 +31,11 @@ export const ReportCenterScreen: React.FC<ReportCenterScreenProps> = ({
 
   const scaledCategories = dataset.categories.map((c) => {
     if (domain === 'retention') return c;
+    const decimals = domain === 'revenue' ? 2 : 1;
     return {
       ...c,
-      current: Number((c.current * scaleFactor).toFixed(1)),
-      prior: Number((c.prior * scaleFactor).toFixed(1)),
+      current: Number((c.current * scaleFactor).toFixed(decimals)),
+      prior: Number((c.prior * scaleFactor).toFixed(decimals)),
     };
   });
 
@@ -189,9 +190,9 @@ export const ReportCenterScreen: React.FC<ReportCenterScreenProps> = ({
                     <span className="font-semibold text-[#0F172A]">{c.label}</span>
                     <div className="flex items-center gap-3 font-mono tabular-nums">
                       <span className="text-[#059669] font-semibold">
-                        {c.current} {dataset.unit}
+                        {c.current.toLocaleString('en-IN')} {dataset.unit}
                       </span>
-                      <span className="text-[#64748B]">vs {c.prior}</span>
+                      <span className="text-[#64748B]">vs {c.prior.toLocaleString('en-IN')}</span>
                       <span className="text-[#047857] font-semibold">
                         {Number(diffPct) >= 0 ? `+${diffPct}%` : `${diffPct}%`}
                       </span>

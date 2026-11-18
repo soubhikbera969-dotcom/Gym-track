@@ -14,6 +14,7 @@ import {
   transactions,
   zones,
 } from './schema.ts';
+import { formatInr } from '../utils/units.ts';
 import type {
   AuditEntry,
   CheckInLog,
@@ -204,7 +205,7 @@ export async function loadWorkspaceData(userId: number): Promise<WorkspacePayloa
           maxOccupancyThresholdPct: 85,
           autoWaitlistPromote: true,
           gracePeriodDays: 7,
-          taxRatePct: 8.875,
+          taxRatePct: 18,
           requireSignedWaiver: true,
         };
 
@@ -874,7 +875,7 @@ export async function convertLeadDb(
       phone: lead.phone,
       initials: initials || 'KM',
       tier: 'Performance Unlimited',
-      monthlyRate: lead.estimatedValue || 265,
+      monthlyRate: lead.estimatedValue || 6500,
       status: 'Active',
       checkIns30d: 1,
       weeklySpark: [0, 0, 0, 0, 0, 0, 1],
@@ -973,7 +974,7 @@ export async function createPlanDb(
       includedClasses: plan.includedClasses,
       activeSubscribers: plan.activeSubscribers,
     });
-    await appendAuditDb(userId, actorName, actorRole, 'Billing', 'Created membership plan', `${plan.name} ($${plan.price})`);
+    await appendAuditDb(userId, actorName, actorRole, 'Billing', 'Created membership plan', `${plan.name} (${formatInr(plan.price)})`);
     return plan;
   } catch (error) {
     console.error('Database query failed in createPlanDb:', error);
@@ -1234,7 +1235,7 @@ export async function evaluateAutomatedNotificationsDb(
               m.subscription.paymentStatus === 'Past Due'
                 ? `Past-Due Renewal Reminder: ${m.name}`
                 : `Membership Expiring Soon: ${m.name}`,
-            message: `${m.tier} ($${m.monthlyRate}/mo) ${
+            message: `${m.tier} (${formatInr(m.monthlyRate)}/mo) ${
               m.subscription.paymentStatus === 'Past Due'
                 ? 'has a past-due balance.'
                 : `expires on ${m.subscription.endDate}.`

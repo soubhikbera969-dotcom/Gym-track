@@ -1,4 +1,5 @@
 import React from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Activity,
   AlertTriangle,
@@ -26,6 +27,7 @@ import { GymFloor3D } from './GymFloor3D';
 import { MemberAvatar } from './MemberAvatar';
 import { MultiAxisChart } from './MultiAxisChart';
 import { SparklineStatCard } from './SparklineStatCard';
+import { formatInr, formatNumberIn, formatTempC } from '../utils/units';
 
 interface OverviewScreenProps {
   activeRole: UserRole;
@@ -97,13 +99,20 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                 key={role}
                 type="button"
                 onClick={() => onChangeRole(role)}
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`relative px-3 py-1 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeRole === role
-                    ? 'bg-white text-[#0F172A] shadow-xs'
+                    ? 'text-[#0F172A]'
                     : 'text-[#64748B] hover:text-[#0F172A]'
                 }`}
               >
-                {role}
+                {activeRole === role && (
+                  <motion.span
+                    layoutId="overview-role-pill"
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute inset-0 rounded-full bg-white shadow-xs"
+                  />
+                )}
+                <span className="relative z-10">{role}</span>
               </button>
             ))}
           </div>
@@ -152,8 +161,8 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             label={activeRole === 'Sales' ? 'Open Pipeline Leads' : 'Active Members'}
             value={
               activeRole === 'Sales'
-                ? openLeadsCount.toLocaleString()
-                : activeMemberCount.toLocaleString()
+                ? formatNumberIn(openLeadsCount)
+                : formatNumberIn(activeMemberCount)
             }
             delta={facility.membersDelta}
             sublabel={activeRole === 'Sales' ? '44% trial conv.' : 'vs 30d prior'}
@@ -162,7 +171,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           />
           <SparklineStatCard
             label="Today's Check-Ins"
-            value={todayCheckIns.toLocaleString()}
+            value={formatNumberIn(todayCheckIns)}
             delta={facility.checkInsDelta}
             sublabel="doors open 05:30"
             data={[...KPI_SPARKS.checkIns.slice(0, -1), todayCheckIns]}
@@ -170,7 +179,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           />
           <SparklineStatCard
             label="Monthly Recurring"
-            value={`$${mrrTotal.toLocaleString()}`}
+            value={formatInr(mrrTotal)}
             delta={facility.mrrDelta}
             sublabel="net retention 97.4%"
             data={KPI_SPARKS.mrr}
@@ -343,7 +352,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                   <span className="inline-flex items-center gap-2">
                     <span className="inline-flex items-center gap-0.5">
                       <Thermometer className="h-3 w-3" />
-                      {z.tempF}°F
+                      {formatTempC(z.tempF)}
                     </span>
                     <span className="inline-flex items-center gap-0.5">
                       <Wind className="h-3 w-3" />
@@ -356,33 +365,42 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           })}
         </div>
 
-        {focusedZone && (
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3 text-xs">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#334155]">
-              <span className="font-semibold text-[#0F172A]">{focusedZone.name}</span>
-              <span aria-hidden="true" className="text-[#CBD5E1]">
-                ·
-              </span>
-              <span>
-                Program:{' '}
-                <strong className="font-semibold text-[#0F172A]">
-                  {focusedZone.currentProgram}
-                </strong>
-              </span>
-              <span aria-hidden="true" className="text-[#CBD5E1]">
-                ·
-              </span>
-              <span>Lead: {focusedZone.activeCoach}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onSelectZone('all')}
-              className="text-xs font-semibold text-[#2563EB] hover:text-[#1D4ED8] cursor-pointer whitespace-nowrap"
+        <AnimatePresence>
+          {focusedZone && (
+            <motion.div
+              key={focusedZone.id}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3 text-xs"
             >
-              Reset Focus
-            </button>
-          </div>
-        )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#334155]">
+                <span className="font-semibold text-[#0F172A]">{focusedZone.name}</span>
+                <span aria-hidden="true" className="text-[#CBD5E1]">
+                  ·
+                </span>
+                <span>
+                  Program:{' '}
+                  <strong className="font-semibold text-[#0F172A]">
+                    {focusedZone.currentProgram}
+                  </strong>
+                </span>
+                <span aria-hidden="true" className="text-[#CBD5E1]">
+                  ·
+                </span>
+                <span>Lead: {focusedZone.activeCoach}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectZone('all')}
+                className="text-xs font-semibold text-[#2563EB] hover:text-[#1D4ED8] cursor-pointer whitespace-nowrap"
+              >
+                Reset Focus
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Analytical Chart + Recent Check-Ins Split */}

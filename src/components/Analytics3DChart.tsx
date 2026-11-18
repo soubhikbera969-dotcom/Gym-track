@@ -415,10 +415,10 @@ export const Analytics3DChart: React.FC<Analytics3DChartProps> = ({
           </div>
           <div className="flex items-center gap-3 text-xs font-mono tabular-nums shrink-0">
             <span className="font-semibold text-[#059669]">
-              Now: {activeCat.current} {unit}
+              Now: {activeCat.current.toLocaleString('en-IN')} {unit}
             </span>
             <span className="text-[#2563EB]">
-              Prior: {activeCat.prior} {unit}
+              Prior: {activeCat.prior.toLocaleString('en-IN')} {unit}
             </span>
           </div>
         </div>

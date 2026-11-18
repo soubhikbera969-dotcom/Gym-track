@@ -4,6 +4,7 @@ import type { CheckInLog, EquipmentItem, EquipmentStatus, GymZone, ZoneId } from
 import { GymFloor3D } from './GymFloor3D';
 import { MemberAvatar } from './MemberAvatar';
 import { StatusChip } from './StatusChip';
+import { formatTempC } from '../utils/units';
 
 interface FloorScreenProps {
   facilityName: string;
@@ -145,7 +146,7 @@ export const FloorScreen: React.FC<FloorScreenProps> = ({
                     <div className="flex items-center gap-3 text-xs text-[#64748B] tabular-nums">
                       <span className="inline-flex items-center gap-1">
                         <Thermometer className="h-3.5 w-3.5" />
-                        {z.tempF}°F
+                        {formatTempC(z.tempF)}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Wind className="h-3.5 w-3.5" />

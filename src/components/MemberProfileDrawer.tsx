@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Activity,
   CheckCircle2,
@@ -20,6 +21,7 @@ import type {
 } from '../types/gym';
 import { MemberAvatar } from './MemberAvatar';
 import { StatusChip } from './StatusChip';
+import { TIER_RATES_INR, formatInr } from '../utils/units';
 
 interface MemberProfileDrawerProps {
   member: Member;
@@ -31,12 +33,7 @@ interface MemberProfileDrawerProps {
 
 type ProfileTab = 'profile' | 'assessments' | 'billing' | 'documents';
 
-const TIER_RATES: Record<MembershipTier, number> = {
-  'Performance Unlimited': 265,
-  'Corporate Athlete': 230,
-  'Studio + Floor': 210,
-  'Off-Peak Lab': 165,
-};
+const TIER_RATES = TIER_RATES_INR;
 
 export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
   member,
@@ -54,11 +51,11 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
 
   // Assessment form state
   const [showAssessForm, setShowAssessForm] = useState(false);
-  const [weightLbs, setWeightLbs] = useState(165);
+  const [weightLbs, setWeightLbs] = useState(72);
   const [bodyFatPct, setBodyFatPct] = useState(15.5);
   const [vo2Max, setVo2Max] = useState(49.0);
   const [restingHr, setRestingHr] = useState(54);
-  const [squat1Rm, setSquat1Rm] = useState(245);
+  const [squat1Rm, setSquat1Rm] = useState(110);
   const [assessNotes, setAssessNotes] = useState('');
 
   const assignedCoach = staff.find((s) => s.id === member.assignedCoachId);
@@ -117,7 +114,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
         ...member,
         assessments: [...member.assessments, record],
         activityLog: [
-          { id: `act-${Date.now()}`, date: 'Just now', summary: `Logged physiological assessment (VO2 ${vo2Max}, Squat ${squat1Rm} lb)` },
+          { id: `act-${Date.now()}`, date: 'Just now', summary: `Logged physiological assessment (VO2 ${vo2Max}, Squat ${squat1Rm} kg)` },
           ...member.activityLog,
         ],
       },
@@ -179,11 +176,19 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
   };
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.16 }}
       className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/30"
       onClick={onClose}
     >
-      <aside
+      <motion.aside
+        initial={{ x: 28, opacity: 0.85 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 28, opacity: 0 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         className="w-full max-w-2xl bg-white h-full border-l border-[#E2E8F0] shadow-[0_20px_40px_-12px_rgba(15,23,42,0.18)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -249,6 +254,15 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-6"
+            >
           {tab === 'profile' && (
             <>
               {/* Quick KPIs */}
@@ -407,7 +421,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-[#64748B] mb-1">
-                        Weight (lb)
+                        Weight (kg)
                       </label>
                       <input
                         type="number"
@@ -453,7 +467,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-[#64748B] mb-1">
-                        Squat 1RM
+                        Squat 1RM (kg)
                       </label>
                       <input
                         type="number"
@@ -511,7 +525,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                         <div>
                           <div className="text-[10px] uppercase text-[#64748B]">Weight</div>
                           <div className="font-mono text-sm font-bold text-[#0F172A] tabular-nums">
-                            {a.weightLbs}
+                            {a.weightLbs} kg
                           </div>
                         </div>
                         <div>
@@ -535,7 +549,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                         <div>
                           <div className="text-[10px] uppercase text-[#64748B]">Squat 1RM</div>
                           <div className="font-mono text-sm font-bold text-[#0F172A] tabular-nums">
-                            {a.squat1Rm}
+                            {a.squat1Rm} kg
                           </div>
                         </div>
                       </div>
@@ -556,7 +570,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                       Active Subscription
                     </div>
                     <div className="font-display text-lg font-semibold text-[#0F172A] mt-0.5">
-                      {member.subscription.planName} · ${member.monthlyRate}/mo
+                      {member.subscription.planName} · {formatInr(member.monthlyRate)}/mo
                     </div>
                   </div>
                   <StatusChip status={member.subscription.paymentStatus} />
@@ -594,7 +608,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
                   >
                     {(Object.keys(TIER_RATES) as MembershipTier[]).map((t) => (
                       <option key={t} value={t}>
-                        {t} (${TIER_RATES[t]}/mo)
+                        {t} ({formatInr(TIER_RATES[t])}/mo)
                       </option>
                     ))}
                   </select>
@@ -686,6 +700,8 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Footer Actions */}
@@ -707,7 +723,7 @@ export const MemberProfileDrawer: React.FC<MemberProfileDrawerProps> = ({
             Done
           </button>
         </div>
-      </aside>
-    </div>
+      </motion.aside>
+    </motion.div>
   );
 };

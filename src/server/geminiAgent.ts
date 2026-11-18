@@ -1,4 +1,11 @@
-import { Content, FunctionDeclaration, GoogleGenAI, Schema, ThinkingLevel, Type } from '@google/genai';
+import {
+  GoogleGenAI,
+  ThinkingLevel,
+  Type,
+  type Content,
+  type FunctionDeclaration,
+  type Schema,
+} from '@google/genai';
 import {
   adjustZoneOccupancyDb,
   appendAuditDb,
@@ -17,6 +24,7 @@ import {
   updateLeadDb,
   updateMemberDb,
 } from '../db/repo.ts';
+import { TIER_RATES_INR, formatInr, formatTempC } from '../utils/units.ts';
 import type {
   AgentPersona,
   AgentToolAction,
@@ -185,11 +193,12 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
           description: 'Optional fitness checkup numbers to record',
           properties: {
             coach: { type: Type.STRING },
-            weightLbs: { type: Type.NUMBER },
+            weightLbs: { type: Type.NUMBER, description: 'Body weight in kg' },
+            weightKg: { type: Type.NUMBER, description: 'Body weight in kg' },
             bodyFatPct: { type: Type.NUMBER },
             vo2Max: { type: Type.NUMBER },
             restingHr: { type: Type.NUMBER },
-            squat1Rm: { type: Type.NUMBER },
+            squat1Rm: { type: Type.NUMBER, description: 'Squat 1RM in kg' },
             notes: { type: Type.STRING },
           },
         },
@@ -227,7 +236,7 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
         },
         trialStatus: { type: Type.STRING, description: 'Not Started, Active Trial, Trial Completed, or Expired' },
         followUpDate: { type: Type.STRING, description: 'YYYY-MM-DD' },
-        estimatedValue: { type: Type.NUMBER },
+        estimatedValue: { type: Type.NUMBER, description: 'Estimated monthly plan value in INR (₹)' },
         notes: { type: Type.STRING },
       },
     },
@@ -321,7 +330,7 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: 'update_gym_config',
     description:
-      'Update club settings like opening hours, crowd alert limits, auto-waitlist promotion, billing grace days, tax rate, or waiver requirement.',
+      'Update club settings like opening hours, crowd alert limits, auto-waitlist promotion, billing grace days, GST/tax rate, or waiver requirement.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -329,7 +338,7 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
         maxOccupancyThresholdPct: { type: Type.NUMBER },
         autoWaitlistPromote: { type: Type.BOOLEAN },
         gracePeriodDays: { type: Type.NUMBER },
-        taxRatePct: { type: Type.NUMBER },
+        taxRatePct: { type: Type.NUMBER, description: 'GST rate percentage (e.g. 18)' },
         requireSignedWaiver: { type: Type.BOOLEAN },
       },
     },
@@ -386,12 +395,7 @@ function matchByIdOrName<T extends { id: string; name: string }>(
   );
 }
 
-const TIER_RATES: Record<string, number> = {
-  'Performance Unlimited': 265,
-  'Corporate Athlete': 230,
-  'Studio + Floor': 210,
-  'Off-Peak Lab': 165,
-};
+const TIER_RATES = TIER_RATES_INR;
 
 const FACILITY_NAMES: Record<string, string> = {
   soho: 'Flagship SoHo',
@@ -562,7 +566,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
    - "VO2 Max" / "1RM" -> "cardio fitness score" / "top squat weight" (unless asked directly)
 5. Response Structure:
    - Start with a crisp 1–2 sentence direct answer.
-   - Use clean bullet points with **bold names** and specific dates/dollar figures whenever listing items.
+   - Use clean bullet points with **bold names** and specific dates, rupee (₹) figures, weights in kg, and room temperatures in °C whenever listing items.
    - Offer one clear, practical next step at the end when relevant (e.g., "Would you like me to send Julian a friendly payment reminder?").
 6. Always verify live information using your tools before answering, and never claim an action succeeded unless your tool returned success.`;
 
@@ -612,7 +616,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
           openProspectsCount: openLeads.length,
           overduePayments: pastDue.map((m) => ({
             name: m.name,
-            monthlyAmount: `$${m.monthlyRate}`,
+            monthlyAmount: formatInr(m.monthlyRate),
             plan: m.tier,
           })),
           upcomingClassesCount: ws.sessions.filter((s) => s.status !== 'Cancelled').length,
@@ -653,7 +657,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             email: m.email,
             phone: m.phone,
             plan: m.tier,
-            monthlyPrice: `$${m.monthlyRate}`,
+            monthlyPrice: formatInr(m.monthlyRate),
             membershipStatus: m.status,
             paymentStatus: m.subscription.paymentStatus,
             renewalDate: m.subscription.nextRenewal,
@@ -696,7 +700,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             stage: l.stage,
             trialStatus: l.trialStatus,
             followUpDate: l.followUpDate,
-            monthlyPlanValue: `$${l.estimatedValue}`,
+            monthlyPlanValue: formatInr(l.estimatedValue),
             notes: l.notes,
           })),
         };
@@ -742,7 +746,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
         const memberBilling = ws.members.map((m) => ({
           name: m.name,
           plan: m.tier,
-          monthlyPrice: `$${m.monthlyRate}`,
+          monthlyPrice: formatInr(m.monthlyRate),
           memberStatus: m.status,
           paymentStatus: m.subscription.paymentStatus,
           nextRenewal: m.subscription.nextRenewal,
@@ -751,7 +755,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
         return {
           plans: ws.plans.map((p) => ({
             name: p.name,
-            price: `$${p.price}/${p.billingCycle.toLowerCase()}`,
+            price: `${formatInr(p.price)}/${p.billingCycle.toLowerCase()}`,
             hours: p.accessHours,
             perks: p.includedClasses,
             subscribers: p.activeSubscribers,
@@ -759,7 +763,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
           recentPayments: txns.map((t) => ({
             member: t.memberName,
             plan: t.planName,
-            amount: `$${t.amount}`,
+            amount: formatInr(t.amount),
             date: t.date,
             status: t.status,
             paymentMethod: t.method,
@@ -782,7 +786,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             peopleInside: `${z.occupancy} of ${z.capacity}`,
             coachOnDuty: z.activeCoach,
             currentSession: z.currentProgram,
-            roomTemp: `${z.tempF}°F`,
+            roomTemp: formatTempC(z.tempF),
           })),
           equipmentNeedingAttention: ws.equipment
             .filter((e) => e.status === 'Maintenance')
@@ -824,7 +828,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
       case 'create_member': {
         const memberName = String(args.name || '').trim();
         const email = String(args.email || '').trim();
-        const phone = String(args.phone || '+1 (212) 555-0190');
+        const phone = String(args.phone || '+91 98201 00190');
         const tier = String(args.tier || 'Performance Unlimited') as MembershipTier;
         const preferredZone = String(args.preferredZone || 'lifting') as ZoneId;
         const goals = Array.isArray(args.goals)
@@ -839,7 +843,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             .join('') || 'KM';
         const today = new Date().toISOString().slice(0, 10);
         const nextYear = `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`;
-        const rate = TIER_RATES[tier] ?? 265;
+        const rate = TIER_RATES[tier] ?? 6500;
 
         const member: Member = {
           id: `mem-${Date.now()}`,
@@ -884,7 +888,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
         await createMemberDb(userId, member, actorName, actorRole);
         didMutate = true;
         toolActions.push({ name, summary: `Signed up ${member.name}`, mutated: true });
-        return { success: true, memberName: member.name, plan: member.tier, monthlyPrice: `$${member.monthlyRate}` };
+        return { success: true, memberName: member.name, plan: member.tier, monthlyPrice: formatInr(member.monthlyRate) };
       }
 
       case 'update_member_profile_or_assessment': {
@@ -914,11 +918,11 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             id: `as-${Date.now()}`,
             date: today,
             coach: String(a.coach || actorName),
-            weightLbs: Number(a.weightLbs ?? 165),
+            weightLbs: Number(a.weightKg ?? a.weightLbs ?? 72),
             bodyFatPct: Number(a.bodyFatPct ?? 16.0),
             vo2Max: Number(a.vo2Max ?? 48.0),
             restingHr: Number(a.restingHr ?? 56),
-            squat1Rm: Number(a.squat1Rm ?? 225),
+            squat1Rm: Number(a.squat1Rm ?? 110),
             notes: String(a.notes || 'Recorded via Kinetix Assistant'),
           };
           updated.assessments = [...updated.assessments, rec];
@@ -926,7 +930,7 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             {
               id: `act-${Date.now()}`,
               date: today,
-              summary: `Recorded fitness checkup (Cardio score ${rec.vo2Max}, Squat ${rec.squat1Rm} lb)`,
+              summary: `Recorded fitness checkup (Cardio score ${rec.vo2Max}, Squat ${rec.squat1Rm} kg)`,
             },
             ...updated.activityLog,
           ];
@@ -986,13 +990,13 @@ COMMUNICATION STYLE (ALWAYS FOLLOW):
             id: `lead-${Date.now()}`,
             name: leadName,
             email: String(args.email || `${leadName.toLowerCase().replace(/\s+/g, '.')}@prospect.io`),
-            phone: String(args.phone || '+1 (212) 555-0100'),
+            phone: String(args.phone || '+91 98201 00100'),
             source: (args.source as LeadSource) || 'Walk-In',
             stage: (args.stage as LeadStage) || 'New Inquiry',
             trialStatus: (args.trialStatus as Lead['trialStatus']) || 'Not Started',
             followUpDate: typeof args.followUpDate === 'string' ? args.followUpDate : today,
             assignedStaffId: 'stf-4',
-            estimatedValue: args.estimatedValue !== undefined ? Number(args.estimatedValue) : 230,
+            estimatedValue: args.estimatedValue !== undefined ? Number(args.estimatedValue) : 5500,
             notes: String(args.notes || 'Added via Kinetix Assistant.'),
             createdAt: today,
             facilityId: facId,

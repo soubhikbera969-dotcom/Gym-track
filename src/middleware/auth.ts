@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { Request, Response, NextFunction } from 'express';
-import { DecodedIdToken } from 'firebase-admin/auth';
+import type { Request, Response, NextFunction } from 'express';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 import { adminAuth } from '../lib/firebase-admin.ts';
 import { getOfflineProfileById } from '../db/offlineStore.ts';
 import { isOfflineStorageActive } from '../db/repo.ts';

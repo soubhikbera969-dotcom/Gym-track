@@ -15,6 +15,7 @@ import {
   INITIAL_TRANSACTIONS,
   INITIAL_ZONES,
 } from '../data/initialSeedData.ts';
+import { formatInr } from '../utils/units.ts';
 import type {
   AuditEntry,
   CheckInLog,
@@ -374,7 +375,7 @@ function buildSeedWorkspace(): WorkspacePayload {
       recipientEmail: 'jmercer@ateliervc.com',
       title: 'Expiring & Past-Due Renewal Notice',
       message:
-        'Corporate Athlete subscription expires 2026-11-28 ($230.00 past-due). Automated email reminder queued.',
+        'Corporate Athlete subscription expires 2026-11-28 (₹5,500.00 past-due). Automated email reminder queued.',
       status: 'unread',
       targetScreen: 'billing',
       ruleKey: 'expiring:mem-104',
@@ -747,8 +748,8 @@ export async function convertLeadOffline(
       email: lead.email,
       phone: lead.phone,
       initials,
-      tier: lead.estimatedValue >= 250 ? 'Performance Unlimited' : 'Corporate Athlete',
-      monthlyRate: lead.estimatedValue || 230,
+      tier: lead.estimatedValue >= 6000 ? 'Performance Unlimited' : 'Corporate Athlete',
+      monthlyRate: lead.estimatedValue || 5500,
       status: 'Active',
       checkIns30d: 1,
       weeklySpark: [0, 0, 0, 0, 0, 0, 1],
@@ -770,7 +771,7 @@ export async function convertLeadOffline(
       ],
       assessments: [],
       subscription: {
-        planName: lead.estimatedValue >= 250 ? 'Performance Unlimited' : 'Corporate Athlete',
+        planName: lead.estimatedValue >= 6000 ? 'Performance Unlimited' : 'Corporate Athlete',
         startDate: today,
         endDate: nextYear,
         nextRenewal: today,
@@ -964,7 +965,7 @@ export async function evaluateAutomatedNotificationsOffline(
               recipientName: m.name,
               recipientEmail: m.email,
               title: 'Membership Renewal & Payment Reminder',
-              message: `${m.name}'s ${m.tier} plan ($${m.monthlyRate}/mo) needs attention before ${m.subscription.nextRenewal}.`,
+              message: `${m.name}'s ${m.tier} plan (${formatInr(m.monthlyRate)}/mo) needs attention before ${m.subscription.nextRenewal}.`,
               targetScreen: 'billing',
               ruleKey,
             })

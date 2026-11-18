@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertTriangle,
   Bell,
@@ -77,8 +78,6 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
   const unreadCount = notifications.filter((n) => n.status === 'unread').length;
 
-  if (!open) return null;
-
   const handleRunSweep = async () => {
     setEvaluating(true);
     try {
@@ -128,14 +127,24 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/35"
-      onClick={onClose}
-    >
-      <aside
-        className="w-full max-w-lg bg-white h-full border-l border-[#E2E8F0] flex flex-col shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/35"
+          onClick={onClose}
+        >
+          <motion.aside
+            initial={{ x: 28, opacity: 0.85 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 28, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-lg bg-white h-full border-l border-[#E2E8F0] flex flex-col shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)]"
+            onClick={(e) => e.stopPropagation()}
+          >
         <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-[#ECFDF5] text-[#059669] flex items-center justify-center">
@@ -194,11 +203,16 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         </div>
 
         {/* Manual Reminder Composer */}
-        {composerOpen && (
-          <form
-            onSubmit={handleComposerSubmit}
-            className="px-6 py-4 border-b border-[#E2E8F0] bg-white space-y-3"
-          >
+        <AnimatePresence>
+          {composerOpen && (
+            <motion.form
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              onSubmit={handleComposerSubmit}
+              className="px-6 py-4 border-b border-[#E2E8F0] bg-white space-y-3"
+            >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold text-[#64748B] mb-1">
@@ -305,8 +319,9 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                 {sending ? 'Dispatching...' : 'Dispatch Notification'}
               </button>
             </div>
-          </form>
-        )}
+            </motion.form>
+          )}
+        </AnimatePresence>
 
         {/* Filter Tabs */}
         <div className="px-6 py-2.5 border-b border-[#E2E8F0] flex items-center gap-1.5 overflow-x-auto">
@@ -415,7 +430,9 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
             ))
           )}
         </div>
-      </aside>
-    </div>
+          </motion.aside>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

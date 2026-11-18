@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   Activity,
   BarChart3,
@@ -765,14 +766,27 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="text-sm font-semibold text-[#64748B]">Loading Kinetix...</div>
-      </div>
+      <MotionConfig reducedMotion="user">
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="text-sm font-semibold text-[#64748B]"
+          >
+            Loading Kinetix...
+          </motion.div>
+        </div>
+      </MotionConfig>
     );
   }
 
   if (!user) {
-    return <SignInGate />;
+    return (
+      <MotionConfig reducedMotion="user">
+        <SignInGate />
+      </MotionConfig>
+    );
   }
 
   const operatorName =
@@ -784,7 +798,8 @@ export default function App() {
     .join('');
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex">
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex">
       {/* Persistent Desktop Utility Sidebar (260px) */}
       <aside className="hidden lg:flex lg:w-[260px] lg:shrink-0 lg:flex-col border-r border-[#E2E8F0] bg-white sticky top-0 h-screen">
         <div className="h-16 px-6 flex items-center gap-2.5 border-b border-[#E2E8F0]">
@@ -887,15 +902,24 @@ export default function App() {
       </aside>
 
       {/* Mobile Navigation Drawer */}
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-50 flex lg:hidden bg-[#0F172A]/30"
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <aside
-            className="w-68 bg-white h-full border-r border-[#E2E8F0] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-50 flex lg:hidden bg-[#0F172A]/30"
+            onClick={() => setMobileNavOpen(false)}
           >
+            <motion.aside
+              initial={{ x: -24, opacity: 0.8 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -24, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-68 bg-white h-full border-r border-[#E2E8F0] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="h-16 px-5 flex items-center justify-between border-b border-[#E2E8F0]">
               <span className="font-display text-lg font-bold text-[#0F172A]">Kinetix</span>
               <button
@@ -958,9 +982,10 @@ export default function App() {
                 Switch Profile / Sign Out
               </button>
             </div>
-          </aside>
-        </div>
-      )}
+          </motion.aside>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Workspace */}
       <div className="flex-1 min-w-0 flex flex-col">
@@ -1057,8 +1082,15 @@ export default function App() {
               Syncing workspace records...
             </div>
           ) : (
-            <>
-              {activeScreen === 'overview' && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeScreen}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {activeScreen === 'overview' && (
                 <OverviewScreen
                   activeRole={activeRole}
                   onChangeRole={(r) => void handleChangeRole(r)}
@@ -1167,21 +1199,31 @@ export default function App() {
                   onExportLeadsCsv={handleExportLeadsCsv}
                 />
               )}
-            </>
+              </motion.div>
+            </AnimatePresence>
           )}
         </main>
       </div>
 
       {/* Global Search Modal */}
-      {globalSearchOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-[#0F172A]/35 pt-20 p-4"
-          onClick={() => setGlobalSearchOpen(false)}
-        >
-          <div
-            className="modal-elevated w-full max-w-lg rounded-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {globalSearchOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-start justify-center bg-[#0F172A]/35 pt-20 p-4"
+            onClick={() => setGlobalSearchOpen(false)}
           >
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.985 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="modal-elevated w-full max-w-lg rounded-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="flex items-center gap-3 px-4 py-3 border-b border-[#E2E8F0]">
               <Search className="h-4 w-4 text-[#64748B]" />
               <input
@@ -1261,9 +1303,10 @@ export default function App() {
                 </>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Automated Gym Communications Drawer */}
       <NotificationsDrawer
@@ -1315,15 +1358,23 @@ export default function App() {
       />
 
       {/* Ephemeral Action Feedback Toast */}
-      {toastMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-5 right-5 z-50 rounded-lg border border-[#E2E8F0] bg-[#0F172A] px-4 py-2.5 text-xs font-semibold text-white shadow-[0_8px_24px_-4px_rgba(15,23,42,0.18)]"
-        >
-          {toastMessage}
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            key={toastMessage}
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed bottom-5 right-5 z-50 rounded-lg border border-[#E2E8F0] bg-[#0F172A] px-4 py-2.5 text-xs font-semibold text-white shadow-[0_8px_24px_-4px_rgba(15,23,42,0.18)]"
+          >
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </div>
+    </MotionConfig>
   );
 }

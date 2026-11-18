@@ -3,6 +3,7 @@ import { CreditCard, Download, Plus, RefreshCw, Snowflake, XCircle } from 'lucid
 import type { Member, MembershipPlan, TransactionRecord } from '../types/gym';
 import { StatusChip } from './StatusChip';
 import { buildSafeCsv } from '../utils/csv';
+import { formatInr } from '../utils/units';
 
 interface BillingScreenProps {
   plans: MembershipPlan[];
@@ -22,7 +23,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
   const [txnFilter, setTxnFilter] = useState<'All' | TransactionRecord['status']>('All');
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [planName, setPlanName] = useState('');
-  const [planPrice, setPlanPrice] = useState(295);
+  const [planPrice, setPlanPrice] = useState(7500);
   const [planHours, setPlanHours] = useState('All Hours (05:30–22:30)');
   const [planClasses, setPlanClasses] = useState('Unlimited Classes + Recovery');
 
@@ -110,7 +111,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
             </div>
             <div>
               <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                Monthly Price ($)
+                Monthly Price (₹)
               </label>
               <input
                 type="number"
@@ -162,7 +163,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                 </div>
                 <div className="mt-3 flex items-baseline gap-1">
                   <span className="font-display text-3xl font-bold text-[#0F172A] tabular-nums">
-                    ${p.price}
+                    {formatInr(p.price)}
                   </span>
                   <span className="text-xs text-[#64748B]">/ {p.billingCycle.toLowerCase()}</span>
                 </div>
@@ -219,7 +220,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                   <td className="px-6">
                     <div className="text-sm font-semibold text-[#0F172A]">{m.name}</div>
                     <div className="text-xs text-[#64748B] font-mono tabular-nums">
-                      ${m.monthlyRate}/mo
+                      {formatInr(m.monthlyRate)}/mo
                     </div>
                   </td>
                   <td className="px-4 text-xs font-medium text-[#334155] whitespace-nowrap">
@@ -360,7 +361,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                     <StatusChip status={t.status} />
                   </td>
                   <td className="px-6 font-mono text-sm font-semibold text-[#0F172A] tabular-nums text-right">
-                    ${t.amount.toFixed(2)}
+                    {formatInr(t.amount, 2)}
                   </td>
                 </tr>
               ))}

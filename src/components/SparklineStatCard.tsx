@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 
 interface SparklineStatCardProps {
   label: string;
@@ -49,7 +50,11 @@ export const SparklineStatCard: React.FC<SparklineStatCardProps> = ({
   const isPositive = delta.trim().startsWith('+');
 
   return (
-    <div className="card-resting rounded-lg p-6 flex flex-col justify-between transition-shadow duration-150 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),0_2px_6px_-2px_rgba(15,23,42,0.04)]">
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+      className="card-resting rounded-lg p-6 flex flex-col justify-between transition-shadow duration-150 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08),0_2px_6px_-2px_rgba(15,23,42,0.04)]"
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-[#64748B]">
           {label}
@@ -86,16 +91,19 @@ export const SparklineStatCard: React.FC<SparklineStatCardProps> = ({
             </linearGradient>
           </defs>
           <path d={areaPath} fill={`url(#${gradId})`} />
-          <path
+          <motion.path
             d={linePath}
             fill="none"
             stroke={strokeColor}
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            initial={{ pathLength: 0.2, opacity: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
           />
         </svg>
       </div>
-    </div>
+    </motion.div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { ChartPoint, TimeRange } from '../types/gym';
 
 interface MultiAxisChartProps {
@@ -92,13 +93,20 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
                 key={r}
                 type="button"
                 onClick={() => onRangeChange(r)}
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`relative px-3 py-1 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   range === r
-                    ? 'bg-white text-[#0F172A] shadow-xs'
+                    ? 'text-[#0F172A]'
                     : 'text-[#64748B] hover:text-[#0F172A]'
                 }`}
               >
-                {r}
+                {range === r && (
+                  <motion.span
+                    layoutId="chart-range-pill"
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute inset-0 rounded-full bg-white shadow-xs"
+                  />
+                )}
+                <span className="relative z-10">{r}</span>
               </button>
             ))}
           </div>
@@ -145,20 +153,28 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
           })}
 
           <path d={checkInArea} fill="url(#checkInWash)" />
-          <path
+          <motion.path
+            key={`ci-${range}`}
             d={checkInPath}
             fill="none"
             stroke="#059669"
             strokeWidth="2.5"
             strokeLinecap="round"
+            initial={{ pathLength: 0.3, opacity: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           />
-          <path
+          <motion.path
+            key={`bk-${range}`}
             d={bookingPath}
             fill="none"
             stroke="#2563EB"
             strokeWidth="2.25"
             strokeLinecap="round"
             strokeDasharray="0"
+            initial={{ pathLength: 0.3, opacity: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           />
 
           {activeX !== null && activePoint && hoverIdx !== null && (
@@ -220,35 +236,42 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
           })}
         </svg>
 
-        {activePoint && activeX !== null && (
-          <div
-            className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08)]"
-            style={{
-              left: `${Math.min(Math.max((activeX / width) * 100, 12), 78)}%`,
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <div className="font-semibold text-[#0F172A] mb-1">{activePoint.label}</div>
-            <div className="flex items-center justify-between gap-4 text-[#334155] tabular-nums">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-[#059669]" />
-                Check-Ins
-              </span>
-              <span className="font-mono font-semibold text-[#0F172A]">
-                {activePoint.checkIns.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4 text-[#334155] tabular-nums mt-0.5">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-[#2563EB]" />
-                Bookings
-              </span>
-              <span className="font-mono font-semibold text-[#0F172A]">
-                {activePoint.bookings.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {activePoint && activeX !== null && (
+            <motion.div
+              key={activePoint.label}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08)]"
+              style={{
+                left: `${Math.min(Math.max((activeX / width) * 100, 12), 78)}%`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <div className="font-semibold text-[#0F172A] mb-1">{activePoint.label}</div>
+              <div className="flex items-center justify-between gap-4 text-[#334155] tabular-nums">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#059669]" />
+                  Check-Ins
+                </span>
+                <span className="font-mono font-semibold text-[#0F172A]">
+                  {activePoint.checkIns.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 text-[#334155] tabular-nums mt-0.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#2563EB]" />
+                  Bookings
+                </span>
+                <span className="font-mono font-semibold text-[#0F172A]">
+                  {activePoint.bookings.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

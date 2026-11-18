@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { Download, Plus, Search, UserCheck } from 'lucide-react';
 import type { Member, MemberStatus, MembershipTier, StaffMember } from '../types/gym';
 import { MemberAvatar } from './MemberAvatar';
 import { MemberProfileDrawer } from './MemberProfileDrawer';
 import { StatusChip } from './StatusChip';
+import { formatInr } from '../utils/units';
 
 interface MembersScreenProps {
   members: Member[];
@@ -218,7 +220,7 @@ export const MembersScreen: React.FC<MembersScreenProps> = ({
                       </div>
                     </td>
                     <td className="px-4 text-sm font-mono font-semibold text-[#0F172A] tabular-nums text-right whitespace-nowrap">
-                      ${m.monthlyRate}
+                      {formatInr(m.monthlyRate)}
                     </td>
                     <td className="px-4 text-xs text-[#64748B] font-mono tabular-nums whitespace-nowrap">
                       {m.lastVisit}
@@ -245,15 +247,18 @@ export const MembersScreen: React.FC<MembersScreenProps> = ({
         )}
       </div>
 
-      {selectedMember && (
-        <MemberProfileDrawer
-          member={selectedMember}
-          staff={staff}
-          onClose={() => setSelectedMemberId(null)}
-          onCheckInMember={onCheckInMember}
-          onUpdateMember={onUpdateMember}
-        />
-      )}
+      <AnimatePresence>
+        {selectedMember && (
+          <MemberProfileDrawer
+            key={selectedMember.id}
+            member={selectedMember}
+            staff={staff}
+            onClose={() => setSelectedMemberId(null)}
+            onCheckInMember={onCheckInMember}
+            onUpdateMember={onUpdateMember}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Activity,
   ArrowRight,
@@ -73,7 +74,12 @@ export const SignInGate: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.06)] space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.06)] space-y-6"
+      >
         {/* Brand Header */}
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-[#059669] text-white flex items-center justify-center shrink-0">
@@ -173,28 +179,34 @@ export const SignInGate: React.FC = () => {
                       )}
                     </div>
 
-                    {isUnlocking && (
-                      <form
-                        onSubmit={(e) => void handleUnlockSubmit(e, profile.id)}
-                        className="mt-3 pt-3 border-t border-[#E2E8F0] flex items-center gap-2"
-                      >
-                        <input
-                          type="password"
-                          autoFocus
-                          value={unlockPin}
-                          onChange={(e) => setUnlockPin(e.target.value)}
-                          placeholder="Enter profile passcode"
-                          className="flex-1 rounded-lg border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:border-[#059669]"
-                        />
-                        <button
-                          type="submit"
-                          disabled={signingIn || !unlockPin}
-                          className="rounded-lg bg-[#059669] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-60 cursor-pointer"
+                    <AnimatePresence>
+                      {isUnlocking && (
+                        <motion.form
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                          onSubmit={(e) => void handleUnlockSubmit(e, profile.id)}
+                          className="mt-3 pt-3 border-t border-[#E2E8F0] flex items-center gap-2"
                         >
-                          Unlock
-                        </button>
-                      </form>
-                    )}
+                          <input
+                            type="password"
+                            autoFocus
+                            value={unlockPin}
+                            onChange={(e) => setUnlockPin(e.target.value)}
+                            placeholder="Enter profile passcode"
+                            className="flex-1 rounded-lg border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:border-[#059669]"
+                          />
+                          <button
+                            type="submit"
+                            disabled={signingIn || !unlockPin}
+                            className="rounded-lg bg-[#059669] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#047857] disabled:opacity-60 cursor-pointer"
+                          >
+                            Unlock
+                          </button>
+                        </motion.form>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
@@ -203,8 +215,15 @@ export const SignInGate: React.FC = () => {
         )}
 
         {/* Gmail Sign-In / Add Profile */}
-        {(showAddForm || deviceProfiles.length === 0) && (
-          <div className="space-y-4 pt-2 border-t border-[#F1F5F9]">
+        <AnimatePresence>
+          {(showAddForm || deviceProfiles.length === 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-4 pt-2 border-t border-[#F1F5F9]"
+            >
             {deviceProfiles.length > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#64748B]">
@@ -286,8 +305,9 @@ export const SignInGate: React.FC = () => {
                 </button>
               </form>
             )}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="pt-4 border-t border-[#F1F5F9] grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-[#F8FAFC] px-2 py-2">
@@ -303,7 +323,7 @@ export const SignInGate: React.FC = () => {
             <div className="text-[10px] text-[#64748B]">Private Workspace</div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { COACH_AVATAR } from '../data/gymData';
 import type {
@@ -9,6 +10,7 @@ import type {
   StudioSession,
   ZoneId,
 } from '../types/gym';
+import { TIER_RATES_INR, formatInr } from '../utils/units';
 
 interface CheckInModalProps {
   open: boolean;
@@ -29,8 +31,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const [memberId, setMemberId] = useState(activeMembers[0]?.id ?? '');
   const [zoneId, setZoneId] = useState<ZoneId>('lifting');
 
-  if (!open) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const targetId = memberId || activeMembers[0]?.id;
@@ -40,14 +40,24 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="modal-elevated w-full max-w-md rounded-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.985 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="modal-elevated w-full max-w-md rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]">
           <h3 className="font-display text-lg font-semibold text-[#0F172A]">
             Log Member Check-In
@@ -113,8 +123,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -135,7 +147,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('+1 (212) 555-0140');
+  const [phone, setPhone] = useState('+91 98201 00140');
   const [tier, setTier] = useState<MembershipTier>('Performance Unlimited');
   const [preferredZone, setPreferredZone] = useState<ZoneId>('lifting');
   const [emergencyName, setEmergencyName] = useState('');
@@ -143,14 +155,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   const [goal, setGoal] = useState('Build strength & VO2 baseline');
   const [coachId, setCoachId] = useState(staff[0]?.id ?? 'stf-1');
 
-  if (!open) return null;
-
-  const rateMap: Record<MembershipTier, number> = {
-    'Performance Unlimited': 265,
-    'Corporate Athlete': 230,
-    'Studio + Floor': 210,
-    'Off-Peak Lab': 165,
-  };
+  const rateMap = TIER_RATES_INR;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +170,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
       id: `mem-${Date.now()}`,
       name: name.trim(),
       email: email.trim(),
-      phone: phone.trim() || '+1 (212) 555-0140',
+      phone: phone.trim() || '+91 98201 00140',
       initials: initials || 'KM',
       tier,
       monthlyRate: rateMap[tier],
@@ -181,7 +186,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
       emergencyContact: {
         name: emergencyName.trim() || 'On File',
         relation: 'Primary',
-        phone: emergencyPhone.trim() || '+1 (212) 555-0100',
+        phone: emergencyPhone.trim() || '+91 98201 00100',
       },
       documents: [
         {
@@ -214,14 +219,24 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="modal-elevated w-full max-w-lg rounded-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.985 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="modal-elevated w-full max-w-lg rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]">
           <h3 className="font-display text-lg font-semibold text-[#0F172A]">
             Enroll New Member
@@ -288,10 +303,10 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                 onChange={(e) => setTier(e.target.value as MembershipTier)}
                 className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-2 text-xs font-medium text-[#0F172A]"
               >
-                <option value="Performance Unlimited">Unlimited ($265)</option>
-                <option value="Corporate Athlete">Corporate ($230)</option>
-                <option value="Studio + Floor">Studio + Floor ($210)</option>
-                <option value="Off-Peak Lab">Off-Peak ($165)</option>
+                <option value="Performance Unlimited">Unlimited ({formatInr(rateMap['Performance Unlimited'])})</option>
+                <option value="Corporate Athlete">Corporate ({formatInr(rateMap['Corporate Athlete'])})</option>
+                <option value="Studio + Floor">Studio + Floor ({formatInr(rateMap['Studio + Floor'])})</option>
+                <option value="Off-Peak Lab">Off-Peak ({formatInr(rateMap['Off-Peak Lab'])})</option>
               </select>
             </div>
             <div>
@@ -372,8 +387,10 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -396,8 +413,6 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({
   const [startTime, setStartTime] = useState('04:30 PM');
   const [capacity, setCapacity] = useState(20);
   const [intensity, setIntensity] = useState<StudioSession['intensity']>('HIIT');
-
-  if (!open) return null;
 
   const zoneMap: Record<string, ZoneId> = {
     'Strength Platform': 'lifting',
@@ -431,14 +446,24 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="modal-elevated w-full max-w-md rounded-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.985 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="modal-elevated w-full max-w-md rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]">
           <h3 className="font-display text-lg font-semibold text-[#0F172A]">
             Schedule Studio Session
@@ -555,7 +580,9 @@ export const ScheduleSessionModal: React.FC<ScheduleSessionModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

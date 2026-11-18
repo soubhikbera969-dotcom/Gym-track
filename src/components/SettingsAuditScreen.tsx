@@ -133,7 +133,7 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
         const email = cols[1];
         if (!name || !email) continue;
         const tier = (cols[2] as MembershipTier) || 'Studio + Floor';
-        const rate = Number(cols[3]) || 210;
+        const rate = Number(cols[3]) || 4800;
         const initials = name
           .split(/\s+/)
           .slice(0, 2)
@@ -143,7 +143,7 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
           id: `mem-imp-${Date.now()}-${i}`,
           name,
           email,
-          phone: cols[4] || '+1 (212) 555-0190',
+          phone: cols[4] || '+91 98201 00190',
           initials: initials || 'KM',
           tier,
           monthlyRate: rate,
@@ -156,7 +156,7 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
           facilityId,
           notes: 'Imported via CSV batch upload.',
           goals: ['Complete 30-day baseline assessment'],
-          emergencyContact: { name: 'On File', relation: 'Primary', phone: '+1 (212) 555-0100' },
+          emergencyContact: { name: 'On File', relation: 'Primary', phone: '+91 98201 00100' },
           documents: [
             { id: `doc-${Date.now()}-${i}`, title: 'Liability & Studio Waiver', type: 'Waiver', status: 'Pending', updatedAt: '2026-11-15' },
           ],
@@ -188,8 +188,8 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
   const handleDownloadTemplate = () => {
     const sample = [
       'Name,Email,Tier,MonthlyRate,Phone',
-      'Rowan Mercer,rowan@kinetix.club,Performance Unlimited,265,+1 (212) 555-0181',
-      'Tessa Cho,tessa.cho@studio.co,Studio + Floor,210,+1 (646) 555-0177',
+      'Rowan Mercer,rowan@kinetix.club,Performance Unlimited,6500,+91 98201 00181',
+      'Tessa Cho,tessa.cho@studio.co,Studio + Floor,4800,+91 98203 00177',
     ].join('\n');
     const blob = new Blob([sample], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -286,11 +286,11 @@ export const SettingsAuditScreen: React.FC<SettingsAuditScreenProps> = ({
             </div>
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-[#64748B] mb-1.5">
-                Local Sales Tax (%)
+                GST Rate (%)
               </label>
               <input
                 type="number"
-                step="0.005"
+                step="0.5"
                 value={draft.taxRatePct}
                 onChange={(e) => setDraft({ ...draft, taxRatePct: Number(e.target.value) })}
                 className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm font-mono text-[#0F172A]"

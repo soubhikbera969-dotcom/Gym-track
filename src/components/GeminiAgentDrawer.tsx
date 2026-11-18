@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Bot,
   Check,
@@ -50,7 +51,7 @@ const PROMPT_GROUPS: { label: string; prompts: string[] }[] = [
     label: 'Make Instant Updates',
     prompts: [
       'Check Marcus Thorne into the Strength area',
-      'Save a fitness checkup for Maya Lin (132 lbs, 55.2 cardio score)',
+      'Save a fitness checkup for Maya Lin (60 kg, 55.2 cardio score)',
       'Send reminders for expiring memberships and due follow-ups',
     ],
   },
@@ -266,8 +267,6 @@ export const GeminiAgentDrawer: React.FC<GeminiAgentDrawerProps> = ({
       }
     };
   }, []);
-
-  if (!open) return null;
 
   const stopAudioPlayback = () => {
     if (audioPlayerRef.current) {
@@ -495,14 +494,24 @@ export const GeminiAgentDrawer: React.FC<GeminiAgentDrawerProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/35"
-      onClick={onClose}
-    >
-      <aside
-        className="w-full max-w-xl bg-white h-full border-l border-[#E2E8F0] flex flex-col shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/35"
+          onClick={onClose}
+        >
+          <motion.aside
+            initial={{ x: 28, opacity: 0.85 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 28, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-xl bg-white h-full border-l border-[#E2E8F0] flex flex-col shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)]"
+            onClick={(e) => e.stopPropagation()}
+          >
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -637,8 +646,11 @@ export const GeminiAgentDrawer: React.FC<GeminiAgentDrawerProps> = ({
           )}
 
           {messages.map((msg) => (
-            <div
+            <motion.div
               key={msg.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
               className={`flex flex-col ${
                 msg.role === 'user' ? 'items-end' : 'items-start'
               }`}
@@ -720,7 +732,7 @@ export const GeminiAgentDrawer: React.FC<GeminiAgentDrawerProps> = ({
                   </>
                 )}
               </div>
-            </div>
+            </motion.div>
           ))}
 
           {(sending || transcribing) && (
@@ -818,8 +830,10 @@ export const GeminiAgentDrawer: React.FC<GeminiAgentDrawerProps> = ({
             </form>
           )}
         </div>
-      </aside>
-    </div>
+          </motion.aside>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
